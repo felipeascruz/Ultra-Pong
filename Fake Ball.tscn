@@ -1,0 +1,36 @@
+[gd_scene load_steps=4 format=3 uid="uid://dfll56b255mof"]
+
+[ext_resource type="Texture2D" uid="uid://crc7uaopnc2dd" path="res://BallSprite.png" id="1_a3dll"]
+
+[sub_resource type="CSharpScript" id="CSharpScript_xvian"]
+script/source = "using Godot;
+using System;
+
+public partial class FakeBall : CharacterBody2D
+{
+	public override void _Ready()
+	{
+		var hitBox = (CircleShape2D)GetNode<CollisionShape2D>(\"Collision\").Shape;
+		GetNode<Sprite2D>(\"Sprite2D\").Scale = new Vector2(hitBox.Radius * 0.0022F, hitBox.Radius * 0.0022F);
+	}
+}
+"
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_li223"]
+radius = 39.0128
+
+[node name="Fake Ball" type="CharacterBody2D"]
+script = SubResource("CSharpScript_xvian")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+process_thread_group = 1
+process_thread_group_order = 0
+process_thread_messages = 0
+scale = Vector2(0.0870587, 0.0870588)
+texture = ExtResource("1_a3dll")
+
+[node name="Collision" type="CollisionShape2D" parent="."]
+process_thread_group = 2
+process_thread_group_order = 0
+process_thread_messages = 0
+shape = SubResource("CircleShape2D_li223")

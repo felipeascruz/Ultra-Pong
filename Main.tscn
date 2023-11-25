@@ -1,0 +1,185 @@
+[gd_scene load_steps=12 format=3 uid="uid://dfu6g7r6en4iw"]
+
+[ext_resource type="Script" path="res://Main.cs" id="1_8th4n"]
+[ext_resource type="PackedScene" uid="uid://cse05e4dbaikg" path="res://Ball.tscn" id="2_5om6r"]
+
+[sub_resource type="RectangleShape2D" id="8"]
+size = Vector2(1200, 128)
+
+[sub_resource type="RectangleShape2D" id="9"]
+size = Vector2(1200, 128)
+
+[sub_resource type="RectangleShape2D" id="10"]
+size = Vector2(1983, 128)
+
+[sub_resource type="RectangleShape2D" id="11"]
+size = Vector2(1975.5, 128)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1xbao"]
+size = Vector2(10, 1080)
+
+[sub_resource type="SystemFont" id="SystemFont_pme4k"]
+hinting = 2
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_uaqvs"]
+properties/0/path = NodePath("Left:text")
+properties/0/spawn = false
+properties/0/sync = false
+properties/0/watch = true
+properties/1/path = NodePath("Right:text")
+properties/1/spawn = false
+properties/1/sync = false
+properties/1/watch = true
+properties/2/path = NodePath("Left:theme_override_colors/font_color")
+properties/2/spawn = false
+properties/2/sync = false
+properties/2/watch = true
+properties/3/path = NodePath("Right:theme_override_colors/font_color")
+properties/3/spawn = false
+properties/3/sync = false
+properties/3/watch = true
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_v32wk"]
+size = Vector2(30, 1300)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_kudw5"]
+size = Vector2(30, 1300)
+
+[node name="World" type="Node2D"]
+script = ExtResource("1_8th4n")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+process_thread_group = 2
+process_thread_group_order = 0
+process_thread_messages = 0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1920.0
+offset_bottom = 1080.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.101961, 0.101961, 0.101961, 1)
+
+[node name="SideBorders" type="StaticBody2D" parent="."]
+collision_layer = 12
+collision_mask = 0
+metadata/_edit_group_ = true
+
+[node name="LeftWall" type="CollisionShape2D" parent="SideBorders"]
+position = Vector2(-64, 540)
+rotation = 1.5708
+shape = SubResource("8")
+one_way_collision = true
+one_way_collision_margin = 128.0
+
+[node name="RightWall" type="CollisionShape2D" parent="SideBorders"]
+position = Vector2(1984, 540)
+rotation = -1.5708
+shape = SubResource("9")
+one_way_collision = true
+one_way_collision_margin = 128.0
+
+[node name="Borders" type="StaticBody2D" parent="."]
+collision_layer = 12
+collision_mask = 3
+metadata/_edit_group_ = true
+
+[node name="Ceiling" type="CollisionShape2D" parent="Borders"]
+position = Vector2(963.5, -64)
+rotation = 3.14159
+shape = SubResource("10")
+one_way_collision = true
+one_way_collision_margin = 128.0
+
+[node name="Floor" type="CollisionShape2D" parent="Borders"]
+position = Vector2(961.75, 1144)
+shape = SubResource("11")
+one_way_collision = true
+one_way_collision_margin = 128.0
+
+[node name="MidField" type="StaticBody2D" parent="."]
+process_mode = 4
+process_thread_group = 2
+process_thread_group_order = 0
+process_thread_messages = 0
+position = Vector2(960, 540)
+collision_layer = 8
+metadata/_edit_group_ = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="MidField"]
+shape = SubResource("RectangleShape2D_1xbao")
+
+[node name="ColorRect" type="ColorRect" parent="MidField"]
+offset_left = -5.0
+offset_top = -540.0
+offset_right = 5.0
+offset_bottom = 540.0
+mouse_filter = 2
+color = Color(0.933333, 0.933333, 0.933333, 1)
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://Player.tscn")
+spawn_path = NodePath("../Players")
+spawn_limit = 4
+
+[node name="Players" type="Node2D" parent="."]
+
+[node name="Score" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Left" type="Label" parent="Score"]
+layout_mode = 0
+offset_left = 640.0
+offset_top = 50.0
+offset_right = 697.0
+offset_bottom = 190.0
+theme_override_fonts/font = SubResource("SystemFont_pme4k")
+theme_override_font_sizes/font_size = 100
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Right" type="Label" parent="Score"]
+layout_mode = 0
+offset_left = 1280.0
+offset_top = 50.0
+offset_right = 1337.0
+offset_bottom = 190.0
+theme_override_fonts/font = SubResource("SystemFont_pme4k")
+theme_override_font_sizes/font_size = 100
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="Score"]
+replication_interval = 0.5
+delta_interval = 0.5
+replication_config = SubResource("SceneReplicationConfig_uaqvs")
+visibility_update_mode = 2
+
+[node name="Goals" type="Area2D" parent="."]
+process_mode = 4
+collision_layer = 4
+collision_mask = 2
+monitorable = false
+
+[node name="Left" type="CollisionShape2D" parent="Goals"]
+position = Vector2(-60, 540)
+shape = SubResource("RectangleShape2D_v32wk")
+debug_color = Color(0, 0.552941, 0.266667, 0.419608)
+
+[node name="Right" type="CollisionShape2D" parent="Goals"]
+position = Vector2(1980, 540)
+shape = SubResource("RectangleShape2D_kudw5")
+debug_color = Color(0, 0.552941, 0.266667, 0.419608)
+
+[node name="Ball" parent="." instance=ExtResource("2_5om6r")]
+position = Vector2(960, 540)
+
+[connection signal="body_exited" from="Goals" to="." method="Goal"]

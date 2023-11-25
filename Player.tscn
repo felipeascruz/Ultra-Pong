@@ -1,7 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://b73sbu5b21oxq"]
+[gd_scene load_steps=7 format=3 uid="uid://b73sbu5b21oxq"]
 
 [ext_resource type="Script" path="res://Player.cs" id="1_l0q6y"]
 [ext_resource type="Script" path="res://InputSynchronizer.cs" id="2_yosj1"]
+[ext_resource type="Texture2D" uid="uid://crc7uaopnc2dd" path="res://BallSprite.png" id="3_d1lb8"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_x6dmd"]
 size = Vector2(30, 150)
@@ -55,3 +56,16 @@ visibility_update_mode = 2
 replication_config = SubResource("SceneReplicationConfig_qpwve")
 visibility_update_mode = 2
 script = ExtResource("2_yosj1")
+
+[node name="RotationIndicator" type="Node2D" parent="."]
+visible = false
+
+[node name="Up" type="Sprite2D" parent="RotationIndicator"]
+position = Vector2(0, -60)
+scale = Vector2(0.01, 0.01)
+texture = ExtResource("3_d1lb8")
+
+[node name="Down" type="Sprite2D" parent="RotationIndicator"]
+position = Vector2(0, 60)
+scale = Vector2(0.01, 0.01)
+texture = ExtResource("3_d1lb8")

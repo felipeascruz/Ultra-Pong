@@ -30,6 +30,19 @@ public partial class Player : CharacterBody2D
 		rectangle.PivotOffset = rectangle.Size / 2;
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
+
+		//Add rotation indicator
+		if (Multiplayer.GetUniqueId() == int.Parse(Name))
+			GetNode<Node2D>("RotationIndicator").Visible = true;
+	}
+
+	public override void _Process(double delta)
+	{
+		var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation/2F)) };
+		GetNode<Sprite2D>("RotationIndicator/Down").Modulate = color;
+
+		color.A = Mathf.Abs(Mathf.Sin(Rotation/2F));
+		GetNode<Sprite2D>("RotationIndicator/Up").Modulate = color;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -61,7 +74,7 @@ public partial class Player : CharacterBody2D
 		{
 			var c = GetSlideCollision(i);
 			if (c.GetCollider() is RigidBody2D body)
-				body.ApplyCentralImpulse(-c.GetNormal() *  _speed/80F);
+				body.ApplyImpulse(-c.GetNormal() * _speed/80F, c.GetPosition() - body.GlobalPosition);
 		}
 	}
 }

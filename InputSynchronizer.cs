@@ -5,7 +5,7 @@ using static Godot.Input;
 public partial class InputSynchronizer : MultiplayerSynchronizer
 {	
 	public Vector2 Direction { get; private set; }
-	public bool Boosting { get; set; }
+	public bool Boosting { get; private set; }
 	
 	private bool _isMultiplayerAuthority;
 	private sbyte _rotationDirection = -1;
@@ -22,6 +22,7 @@ public partial class InputSynchronizer : MultiplayerSynchronizer
 	public override void _PhysicsProcess(double delta)
 	{
 		Direction = GetVector("MoveLeft", "MoveRight", "MoveUp", "MoveDown");
+		
 		if (IsActionJustPressed("Boost"))
 			Rpc(nameof(SetBoost), true);
 		if (IsActionJustReleased("Boost"))
@@ -31,17 +32,17 @@ public partial class InputSynchronizer : MultiplayerSynchronizer
 	public override void _Input(InputEvent @event)
 	{
 		if (@event.IsActionPressed("ChangeRotation"))
+		{
 			_rotationDirection *= -1;
+			GetParent().GetNode<Node2D>("RotationIndicator").RotationDegrees += 180F;
+		}
 
 		if (@event is InputEventMouseMotion motion)
 			Rpc(nameof(RotatePlayer), _rotationDirection * motion.Relative.X);
 	}
 
 	[Rpc(CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-	public void RotatePlayer(float value)
-	{
-		GetParent<CharacterBody2D>().Rotate(Mathf.Clamp(value * SENSITIVITY, -MAX_ROTATION, MAX_ROTATION));
-	}
+	public void RotatePlayer(float value) { GetParent<CharacterBody2D>().Rotate(Mathf.Clamp(value * SENSITIVITY, -MAX_ROTATION, MAX_ROTATION));}
 
 	[Rpc(CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
 	private void SetBoost(bool boosting)

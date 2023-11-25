@@ -182,4 +182,10 @@ debug_color = Color(0, 0.552941, 0.266667, 0.419608)
 [node name="Ball" parent="." instance=ExtResource("2_5om6r")]
 position = Vector2(960, 540)
 
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
 [connection signal="body_exited" from="Goals" to="." method="Goal"]

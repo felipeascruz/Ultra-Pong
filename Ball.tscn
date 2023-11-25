@@ -7,7 +7,7 @@
 bounce = 1.0
 
 [sub_resource type="CircleShape2D" id="2"]
-radius = 39.0128
+radius = 21.0
 
 [node name="Ball" type="RigidBody2D"]
 collision_layer = 2
@@ -19,7 +19,7 @@ script = ExtResource("1_swupv")
 metadata/_edit_group_ = true
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.0870587, 0.0870588)
+scale = Vector2(0.046, 0.046)
 texture = ExtResource("2_hfhs0")
 
 [node name="Collision" type="CollisionShape2D" parent="."]

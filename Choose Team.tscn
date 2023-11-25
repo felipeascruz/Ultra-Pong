@@ -1,0 +1,69 @@
+[gd_scene load_steps=3 format=3 uid="uid://dy1xuua4jy3cn"]
+
+[ext_resource type="Script" path="res://ChooseTeam.cs" id="1_g6nph"]
+[ext_resource type="Script" path="res://Spectate.cs" id="2_psu1v"]
+
+[node name="Choose Team" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 1920.0
+offset_bottom = 1080.0
+
+[node name="0" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 305.0
+offset_top = 285.0
+offset_right = 335.0
+offset_bottom = 435.0
+pivot_offset = Vector2(15, 75)
+mouse_filter = 1
+mouse_default_cursor_shape = 2
+color = Color(1, 0, 0, 1)
+script = ExtResource("1_g6nph")
+
+[node name="1" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 305.0
+offset_top = 645.0
+offset_right = 335.0
+offset_bottom = 795.0
+pivot_offset = Vector2(15, 75)
+mouse_filter = 1
+mouse_default_cursor_shape = 2
+color = Color(1, 0.388235, 0.278431, 1)
+script = ExtResource("1_g6nph")
+
+[node name="2" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 1585.0
+offset_top = 285.0
+offset_right = 1615.0
+offset_bottom = 435.0
+pivot_offset = Vector2(15, 75)
+mouse_default_cursor_shape = 2
+color = Color(0, 0, 1, 1)
+script = ExtResource("1_g6nph")
+
+[node name="3" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 1585.0
+offset_top = 645.0
+offset_right = 1615.0
+offset_bottom = 795.0
+pivot_offset = Vector2(15, 75)
+mouse_filter = 1
+mouse_default_cursor_shape = 2
+color = Color(0, 1, 1, 1)
+script = ExtResource("1_g6nph")
+
+[node name="Spectate" type="Button" parent="."]
+layout_mode = 0
+offset_left = 803.0
+offset_top = 437.0
+offset_right = 1123.0
+offset_bottom = 627.0
+theme_override_font_sizes/font_size = 60
+text = "Spectate"
+script = ExtResource("2_psu1v")
+
+[connection signal="pressed" from="Spectate" to="Spectate" method="OnPressed"]

@@ -1,7 +1,8 @@
-[gd_scene load_steps=12 format=3 uid="uid://dfu6g7r6en4iw"]
+[gd_scene load_steps=13 format=3 uid="uid://dfu6g7r6en4iw"]
 
 [ext_resource type="Script" path="res://Main.cs" id="1_8th4n"]
 [ext_resource type="PackedScene" uid="uid://cse05e4dbaikg" path="res://Ball.tscn" id="2_5om6r"]
+[ext_resource type="PackedScene" uid="uid://dy1xuua4jy3cn" path="res://Choose Team.tscn" id="3_4o1i5"]
 
 [sub_resource type="RectangleShape2D" id="8"]
 size = Vector2(1200, 128)
@@ -182,10 +183,6 @@ debug_color = Color(0, 0.552941, 0.266667, 0.419608)
 [node name="Ball" parent="." instance=ExtResource("2_5om6r")]
 position = Vector2(960, 540)
 
-[node name="Control" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="Choose Team" parent="." instance=ExtResource("3_4o1i5")]
 
 [connection signal="body_exited" from="Goals" to="." method="Goal"]

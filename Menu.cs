@@ -8,7 +8,7 @@ public partial class Menu : Control
 		
 		var peer = new ENetMultiplayerPeer();
 
-		var err = peer.CreateClient(ip, GLOBAL.PORT);
+		var err = peer.CreateClient(ip, Global.Port);
 		Multiplayer.MultiplayerPeer = peer;
 		
 		if (err != Error.Ok || Multiplayer.IsServer())
@@ -20,7 +20,7 @@ public partial class Menu : Control
 	{
 		var peer = new ENetMultiplayerPeer();
 
-		var err = peer.CreateServer(GLOBAL.PORT, 4);
+		var err = peer.CreateServer(Global.Port, 4);
 		Multiplayer.MultiplayerPeer = peer;
 		
 		if (err != Error.Ok)

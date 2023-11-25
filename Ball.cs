@@ -1,8 +1,10 @@
 using Godot;
 using System;
+
+
 public partial class Ball : RigidBody2D
 {
-	private const float MAX_SPEED = GLOBAL.PLAYER_SPEED * 4F;
+	private const float MaxSpeed = Global.Player.Speed * 4F;
 	
 	private bool _reset;
 	private Vector2 _resetPosition;
@@ -19,7 +21,7 @@ public partial class Ball : RigidBody2D
 	public override void _EnterTree()
 	{
 		var hitBox = (CircleShape2D)GetNode<CollisionShape2D>("Collision").Shape;
-		hitBox.Radius = GLOBAL.PLAYER_HEIGHT / 7;
+		hitBox.Radius = Global.Player.Size.Y / 7;
 		GetNode<Sprite2D>("Sprite2D").Scale = new Vector2(hitBox.Radius * 0.0022F, hitBox.Radius * 0.0022F);
 	}
 	
@@ -39,8 +41,8 @@ public partial class Ball : RigidBody2D
 			Rpc(nameof(GetServerState), Position, Rotation, LinearVelocity, AngularVelocity);
 
 		//Set Ball Max Speed
-		if (Math.Abs(state.LinearVelocity.X) > MAX_SPEED || Math.Abs(state.LinearVelocity.Y) > MAX_SPEED)
-			state.LinearVelocity = state.LinearVelocity.Normalized() * MAX_SPEED;
+		if (Math.Abs(state.LinearVelocity.X) > MaxSpeed || Math.Abs(state.LinearVelocity.Y) > MaxSpeed)
+			state.LinearVelocity = state.LinearVelocity.Normalized() * MaxSpeed;
 
 		//Reset Ball's position if wanted
 		if (_reset)

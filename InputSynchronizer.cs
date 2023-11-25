@@ -1,5 +1,4 @@
 using Godot;
-using static GLOBAL;
 using static Godot.Input;
 
 public partial class InputSynchronizer : MultiplayerSynchronizer
@@ -42,7 +41,10 @@ public partial class InputSynchronizer : MultiplayerSynchronizer
 	}
 
 	[Rpc(CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-	public void RotatePlayer(float value) { GetParent<CharacterBody2D>().Rotate(Mathf.Clamp(value * SENSITIVITY, -MAX_ROTATION, MAX_ROTATION));}
+	public void RotatePlayer(float value)
+	{
+		GetParent<CharacterBody2D>().Rotate(Mathf.Clamp(value * Global.Player.Sensitivity, -Global.Player.MaxRotation, Global.Player.MaxRotation));
+	}
 
 	[Rpc(CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
 	private void SetBoost(bool boosting)

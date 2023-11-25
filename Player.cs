@@ -1,36 +1,36 @@
 using Godot;
-using static GLOBAL;
 
 public partial class Player : CharacterBody2D
 {
-	private float _speed = PLAYER_SPEED;
-	public Vector2 SpawnPoint { get; set; }
+	[Export(PropertyHint.Range, "0,3,")]
+	public int Number { get; set; }
 
-	private float 
-		_width = PLAYER_WIDTH,
-		_height = PLAYER_HEIGHT;
+	private float _speed = Global.Player.Speed;
+	public Vector2 SpawnPoint { get; private set; }
 
-	[Export]
-	public Color InitialColor { get; set; }
+	public Color InitialColor { get; private set; }
 	
 	public override void _EnterTree()
 	{
 		GetNode("InputSynchronizer").SetMultiplayerAuthority(int.Parse(Name));
-
-		Position = SpawnPoint;
 	}
 	
 	public override void _Ready()
 	{
+		SpawnPoint = Global.Player.SpawnPoints[Number];
+		InitialColor = Global.Player.ColorsArray[Number];
+		Position = SpawnPoint;
+		
 		var hitBox = (RectangleShape2D)GetNode<CollisionShape2D>("Collision").Shape;
-		hitBox.Size = new Vector2(_width, _height);
+		hitBox.Size = Global.Player.Size;
 		
 		var rectangle = GetNode<ColorRect>("Rectangle");
-		rectangle.Size = new Vector2(_width, _height);
+		rectangle.Size = Global.Player.Size;
 		rectangle.PivotOffset = rectangle.Size / 2;
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
-
+		
+		SetProcess(Multiplayer.GetUniqueId() == int.Parse(Name));
 		//Add rotation indicator
 		if (Multiplayer.GetUniqueId() == int.Parse(Name))
 			GetNode<Node2D>("RotationIndicator").Visible = true;
@@ -49,7 +49,7 @@ public partial class Player : CharacterBody2D
 	{
 		var input = (InputSynchronizer)GetNode<MultiplayerSynchronizer>("InputSynchronizer");
 		
-		_speed = PLAYER_SPEED;
+		_speed = Global.Player.Speed;
 		
 		//Check boost
 		if (input.Boosting)

@@ -7,14 +7,12 @@ public partial class Main : Node2D
 	public override void _Ready()
 	{
 		Multiplayer.Connect("server_disconnected", new Callable(this, nameof(Disconnect)));
+		
 		if (!Multiplayer.IsServer())
 			return;
 		
-		Multiplayer.Connect("peer_connected", new Callable(this, nameof(Spawn)));
+		Multiplayer.Connect("peer_connected", new Callable(this, nameof(PeerEntered)));
 		Multiplayer.Connect("peer_disconnected", new Callable(this, nameof(Despawn)));
-		
-		if (!OS.HasFeature("dedicated_server"))
-			Spawn(1);
 	}
 
 	public override void _ExitTree()
@@ -24,7 +22,7 @@ public partial class Main : Node2D
 		if (!Multiplayer.IsServer())
 			return;
 			
-		Multiplayer.Disconnect("peer_connected", new Callable(this, nameof(Spawn)));
+		Multiplayer.Disconnect("peer_connected", new Callable(this, nameof(PeerEntered)));
 		Multiplayer.Disconnect("peer_disconnected", new Callable(this, nameof(Despawn)));
 	}
 	
@@ -34,23 +32,34 @@ public partial class Main : Node2D
 			Input.MouseMode = Input.MouseModeEnum.Visible;
 			GetTree().ChangeSceneToFile("res://Main Menu.tscn");
 	}
-	
-	private void Spawn(int id)
-	{
-		var peerlength = Multiplayer.GetPeers().Length;
-		if (peerlength >= 4)
-			return;
 
-		var player = (Player)GD.Load<PackedScene>("res://Player.tscn").Instantiate<CharacterBody2D>();
-		player.SpawnPoint = GLOBAL.PLAYERS_SPAWN_POINTS[Multiplayer.GetPeers().Length];
-		player.Name = id.ToString();
+	private void PeerEntered(int id)
+	{
+		GD.Print(id + " entered");
+	}
+
+	private void Spectate()
+	{
+		GetNode("Change Team").QueueFree();
+	}
+	
+	public void SelectTeam(string id, int playerNumber)
+	{
+		RpcId(1, nameof(SpawnOnServer), id, playerNumber);
+	}
+	
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = 2)]
+	public void SpawnOnServer(string id, int playerNumber)
+	{
+		GD.Print(id + " spawned as player " + playerNumber);
 		
-		player.InitialColor = GLOBAL.ColorsArray[peerlength];
+		var player = GD.Load<PackedScene>("res://Player.tscn").Instantiate<Player>();
+		player.Name = id;
+		player.Number = playerNumber;
 		
 		GetNode("Players").AddChild(player, true);
-		GD.Print(id + " spawned");
 		
-		if (peerlength == 3)
+		if (GetNode("Players").GetChildren().Count >= 4)
 			StartGame();
 	}
 	
@@ -67,7 +76,7 @@ public partial class Main : Node2D
 	
 	private void StartGame()
 	{
-		ResetGame(GLOBAL.BALL_SPAWN_POINTS[new Random().Next(0, 2)]);
+		ResetGame(Global.Ball.SpawnPoints[new Random().Next(0, 2)]);
 
 		Rpc(nameof(SetGame));
 	}
@@ -116,12 +125,12 @@ public partial class Main : Node2D
 			case < 1920/2F:
 				var right = score.GetNode<Label>("Right");
 				right.Text = (int.Parse(right.Text) + 1).ToString();
-				ResetGame(GLOBAL.BALL_SPAWN_POINTS[1]);
+				ResetGame(Global.Ball.SpawnPoints[1]);
 				break;
 			case > 1920/2F:
 				var left = score.GetNode<Label>("Left");
 				left.Text = (int.Parse(left.Text) + 1).ToString();
-				ResetGame(GLOBAL.BALL_SPAWN_POINTS[0]);
+				ResetGame(Global.Ball.SpawnPoints[0]);
 				break;
 		}
 		

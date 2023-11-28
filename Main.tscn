@@ -47,6 +47,11 @@ size = Vector2(30, 1300)
 size = Vector2(30, 1300)
 
 [node name="World" type="Node2D"]
+process_priority = 1
+process_physics_priority = 1
+process_thread_group = 2
+process_thread_group_order = 3
+process_thread_messages = 0
 script = ExtResource("1_8th4n")
 
 [node name="ColorRect" type="ColorRect" parent="."]
@@ -119,11 +124,6 @@ offset_right = 5.0
 offset_bottom = 540.0
 mouse_filter = 2
 color = Color(0.933333, 0.933333, 0.933333, 1)
-
-[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://Player.tscn")
-spawn_path = NodePath("../Players")
-spawn_limit = 4
 
 [node name="Players" type="Node2D" parent="."]
 

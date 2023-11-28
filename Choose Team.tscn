@@ -4,6 +4,9 @@
 [ext_resource type="Script" path="res://Spectate.cs" id="2_psu1v"]
 
 [node name="Choose Team" type="Control"]
+process_thread_group = 1
+process_thread_group_order = 0
+process_thread_messages = 0
 layout_mode = 3
 anchors_preset = 0
 offset_right = 1920.0

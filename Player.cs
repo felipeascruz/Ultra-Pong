@@ -10,6 +10,8 @@ public partial class Player : CharacterBody2D
 
 	public Color InitialColor { get; private set; }
 	
+	private bool IsLocalPlayer => Multiplayer.GetUniqueId().ToString() == Name;
+	
 	public override void _EnterTree()
 	{
 		GetNode("InputSynchronizer").SetMultiplayerAuthority(int.Parse(Name));
@@ -30,10 +32,17 @@ public partial class Player : CharacterBody2D
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
 		
-		SetProcess(Multiplayer.GetUniqueId() == int.Parse(Name));
-		//Add rotation indicator
-		if (Multiplayer.GetUniqueId() == int.Parse(Name))
-			GetNode<Node2D>("RotationIndicator").Visible = true;
+		switch (IsLocalPlayer)
+		{
+			case false:
+				ProcessThreadGroupOrder = 1;
+				SetProcess(false);
+				break;
+			//Add rotation indicator
+			case true:
+				GetNode<Node2D>("RotationIndicator").Visible = true;
+				break;
+		}
 	}
 
 	public override void _Process(double delta)
@@ -45,7 +54,7 @@ public partial class Player : CharacterBody2D
 		GetNode<Sprite2D>("RotationIndicator/Up").Modulate = color;
 	}
 
-	public override void _PhysicsProcess(double delta)
+	/*public override void _PhysicsProcess(double delta)
 	{
 		var input = (InputSynchronizer)GetNode<MultiplayerSynchronizer>("InputSynchronizer");
 		
@@ -76,5 +85,5 @@ public partial class Player : CharacterBody2D
 			if (c.GetCollider() is RigidBody2D body)
 				body.ApplyImpulse(-c.GetNormal() * _speed/80F, c.GetPosition() - body.GlobalPosition);
 		}
-	}
+	}*/
 }

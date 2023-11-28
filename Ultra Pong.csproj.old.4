@@ -1,0 +1,15 @@
+<Project Sdk="Godot.NET.Sdk/4.1.3">
+  <PropertyGroup>
+    <TargetFramework>net60</TargetFramework>
+    <RootNamespace>UltraPong</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Cursor.cs" />
+    <Compile Remove="Game.cs" />
+    <Compile Remove="Server.cs" />
+    <Compile Remove="Client.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
+  </ItemGroup>
+</Project>

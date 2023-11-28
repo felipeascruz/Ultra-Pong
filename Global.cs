@@ -2,7 +2,7 @@ using Godot;
 
 public partial class Global : Node
 {
-	public const int Port = 1910;
+	public const int Port = 7777;
 	internal abstract class Player
 	{
 		public static readonly Vector2 Size = new(30F, 150F);
@@ -15,7 +15,7 @@ public partial class Global : Node
 		};
 		public static readonly Color[] ColorsArray = {Colors.Red, Colors.Tomato, Colors.Blue, Colors.Aqua};
 		public const float Sensitivity = 0.007F;
-		public const float MaxRotation = 0.23F;
+		public const float MaxRotation = 0.28F;
 	}
 
 	internal abstract class Ball

@@ -10,23 +10,9 @@ public partial class Menu : Control
 
 		var err = peer.CreateClient(ip, Global.Port);
 		Multiplayer.MultiplayerPeer = peer;
-
-		if (err != Error.Ok)
-			Multiplayer.MultiplayerPeer.Close();
-		else
-		{
-			Multiplayer.Connect("connected_to_server", new Callable(this, nameof(Connected)));
-			Multiplayer.Connect("connection_failed", new Callable(this, nameof(Disconnected)));
-		}
-	}
-	
-	private void Disconnected()
-	{
-		Multiplayer.MultiplayerPeer.Close();
-	}
-	
-	private void Connected()
-	{
+		
+		if (err != Error.Ok || Multiplayer.IsServer())
+			return;
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 	
@@ -36,12 +22,9 @@ public partial class Menu : Control
 
 		var err = peer.CreateServer(Global.Port, 4);
 		Multiplayer.MultiplayerPeer = peer;
-
+		
 		if (err != Error.Ok)
-		{
-			Multiplayer.MultiplayerPeer.Close();
 			return;
-		}
 
 		//Get User IP through OS Environment Variable
 		string ip = IP.ResolveHostname(OS.HasFeature("windows") ?

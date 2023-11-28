@@ -55,9 +55,9 @@ public partial class Ball : RigidBody2D
 
 			_reset = false;
 		}
-	}
+}
 
-	[Rpc(CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = 1)]
+	[Rpc(CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = 3)]
 	private void GetServerState(Vector2 position, float rotation, Vector2 linearVelocity, float angularVelocity)
 	{
 		_serverPosition = position;

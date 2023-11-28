@@ -14,7 +14,6 @@ config/name="Ultra Pong"
 run/main_scene="res://Main Menu.tscn"
 config/features=PackedStringArray("4.1", "C#")
 config/icon="res://icon.png"
-config/windows_native_icon="res://favicon.ico"
 
 [autoload]
 

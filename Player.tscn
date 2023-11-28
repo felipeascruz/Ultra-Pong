@@ -1,15 +1,37 @@
-[gd_scene load_steps=4 format=3 uid="uid://b73sbu5b21oxq"]
+[gd_scene load_steps=7 format=3 uid="uid://b73sbu5b21oxq"]
 
 [ext_resource type="Script" path="res://Player.cs" id="1_l0q6y"]
+[ext_resource type="Script" path="res://InputSynchronizer.cs" id="2_yosj1"]
 [ext_resource type="Texture2D" uid="uid://crc7uaopnc2dd" path="res://BallSprite.png" id="3_d1lb8"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_x6dmd"]
 size = Vector2(30, 150)
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_b4uts"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/sync = true
+properties/0/watch = false
+properties/1/path = NodePath(".:rotation")
+properties/1/spawn = true
+properties/1/sync = true
+properties/1/watch = false
+properties/2/path = NodePath(".:velocity")
+properties/2/spawn = true
+properties/2/sync = true
+properties/2/watch = false
+properties/3/path = NodePath(".:Number")
+properties/3/spawn = true
+properties/3/sync = false
+properties/3/watch = false
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_qpwve"]
+properties/0/path = NodePath("InputSynchronizer:Direction")
+properties/0/spawn = true
+properties/0/sync = true
+properties/0/watch = false
+
 [node name="Player" type="CharacterBody2D"]
-process_thread_group = 1
-process_thread_group_order = 0
-process_thread_messages = 0
 collision_mask = 11
 motion_mode = 1
 script = ExtResource("1_l0q6y")
@@ -25,6 +47,15 @@ offset_bottom = 75.0
 pivot_offset = Vector2(15, 75)
 mouse_filter = 2
 color = Color(1, 0, 0, 1)
+
+[node name="ServerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_b4uts")
+visibility_update_mode = 2
+
+[node name="InputSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_qpwve")
+visibility_update_mode = 2
+script = ExtResource("2_yosj1")
 
 [node name="RotationIndicator" type="Node2D" parent="."]
 visible = false

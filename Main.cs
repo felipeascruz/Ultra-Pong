@@ -7,10 +7,10 @@ public partial class Main : Node2D
 	public override void _Ready()
 	{
 		Multiplayer.Connect("server_disconnected", new Callable(this, nameof(Disconnect)));
-
+		
 		if (!Multiplayer.IsServer())
 			return;
-
+		
 		Multiplayer.Connect("peer_connected", new Callable(this, nameof(PeerEntered)));
 		Multiplayer.Connect("peer_disconnected", new Callable(this, nameof(Despawn)));
 	}
@@ -28,9 +28,9 @@ public partial class Main : Node2D
 	
 	public void Disconnect()
 	{
-		Multiplayer.MultiplayerPeer.Close();
-		Input.MouseMode = Input.MouseModeEnum.Visible;
-		GetTree().ChangeSceneToFile("res://Main Menu.tscn");
+			Multiplayer.MultiplayerPeer.Close();
+			Input.MouseMode = Input.MouseModeEnum.Visible;
+			GetTree().ChangeSceneToFile("res://Main Menu.tscn");
 	}
 
 	private void PeerEntered(int id)

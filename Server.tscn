@@ -1,0 +1,92 @@
+[gd_scene load_steps=3 format=3 uid="uid://bvm6rcp6a4bb7"]
+
+[sub_resource type="CSharpScript" id="CSharpScript_qwitn"]
+script/source = "using Godot;
+using Vector2 = System.Numerics.Vector2;
+
+public partial class Server : Node
+{
+	private static MultiplayerApi api = MultiplayerApi.CreateDefaultInterface();
+	public override void _Ready()
+	{
+		var peer = new ENetMultiplayerPeer();
+
+		var err = peer.CreateServer(GLOBAL.PORT, 4);
+		if (err != Error.Ok)
+			return;
+		
+		GetTree().SetMultiplayer(api, GetPath());
+		
+		//Get User IP through OS Environment Variable
+		string ip = IP.ResolveHostname(OS.HasFeature(\"windows\") ?
+			OS.GetEnvironment(\"COMPUTERNAME\") : OS.GetEnvironment(\"HOSTNAME\"), (IP.Type)1);
+
+		GD.Print(\"Server running on IP: \" + ip);
+
+		api.MultiplayerPeer = peer;
+		
+		api.Connect(\"peer_connected\", new Callable(this,\"OnPeerConnection\"));
+		api.Connect(\"peer_disconnected\", new Callable(this, \"OnPeerDisconnection\"));
+	}
+
+	public override void _Process(double delta)
+	{
+		if (!api.HasMultiplayerPeer())
+			return;
+		api.Poll();
+	}
+
+	private void OnPeerConnection(int id)
+	{
+		GD.Print(id + \" connected\");
+		GD.Print(\"Number of Players: \" + Multiplayer.GetPeers().Length);
+	}
+
+	private void OnPeerDisconnection(int id)
+	{
+		GD.Print(id + \" disconnected\");
+	}
+	
+	//RPC Receive functions
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void Spawn()
+	{
+		if (Multiplayer.GetPeers().Length >= 4)
+			return;
+
+		var player = GD.Load<PackedScene>(\"res://Player.tscn\").Instantiate<CharacterBody2D>();
+		player.Position = GLOBAL.SPAWN_POINTS[Multiplayer.GetPeers().Length - 1];
+		
+		GetNode(\"Players\").AddChild(player);
+		
+		GD.Print(Multiplayer.GetRemoteSenderId() + \" spawned\");
+	}
+
+}
+"
+
+[sub_resource type="CSharpScript" id="CSharpScript_cdvry"]
+script/source = "using Godot;
+
+public partial class GameLoop : Node
+{
+    public void Init()
+    {
+        
+    }
+}
+"
+
+[node name="Server" type="Node"]
+script = SubResource("CSharpScript_qwitn")
+
+[node name="Players" type="Node" parent="."]
+
+[node name="GameLoop" type="Node" parent="."]
+script = SubResource("CSharpScript_cdvry")
+
+[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://Player.tscn")
+spawn_path = NodePath("../Players")
+spawn_limit = 4

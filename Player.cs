@@ -12,11 +12,6 @@ public partial class Player : CharacterBody2D
 	
 	private bool IsLocalPlayer => Multiplayer.GetUniqueId().ToString() == Name;
 	
-	public override void _EnterTree()
-	{
-		GetNode("InputSynchronizer").SetMultiplayerAuthority(int.Parse(Name));
-	}
-	
 	public override void _Ready()
 	{
 		SpawnPoint = Global.Player.SpawnPoints[Number];

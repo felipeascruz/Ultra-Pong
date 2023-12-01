@@ -18,15 +18,14 @@ public partial class PlayersHandler : Node
 	private void FetchInput(sbyte stamp, bool left, bool right, bool up, bool down, bool boosting, float rotation)
 	{
 		var player = GetNode<Player>("/root/Main/World/Players/" + Multiplayer.GetRemoteSenderId());
-		
-		var speed = Global.Player.Speed;
-		if (boosting)
-			speed *= 3F;
 			
 		var x = ToSingle(right) - ToSingle(left);
 		var y = ToSingle(down) - ToSingle(up);
-		player.Velocity = new Vector2(x, y) * speed;
-		player.Rotation = Mathf.Clamp(rotation, -Global.Player.MaxRotation, Global.Player.MaxRotation);
+		player.Velocity = new Vector2(x, y) * Global.Player.Speed;
+
+		player.Boosting = boosting;
+
+		player.Rotate(Mathf.Clamp(rotation, -Global.Player.MaxRotation, Global.Player.MaxRotation));
 		
 		RpcId(Multiplayer.GetRemoteSenderId(), nameof(ReturnLocalState), stamp, player.Position, player.Rotation);
 	}
@@ -37,11 +36,12 @@ public partial class PlayersHandler : Node
 		var player = GetNode<Player>("/root/Main/World/Players/" + Multiplayer.GetRemoteSenderId());
 		
 		if (stamp < clientStamp)
-			UpdateState(player.Position, player.Rotation, position, rotation);
-		else
 			UpdateState(_states[stamp].Position, _states[stamp].Rotation,
 				position + player.Position - _states[stamp].Position, 
 				rotation + player.Rotation - _states[stamp].Rotation);
+			
+		else
+			UpdateState(player.Position, player.Rotation, position, rotation);
 		return;
 
 		void UpdateState(Vector2 positionCheck, float rotationCheck, Vector2 newPosition, float newRotation)

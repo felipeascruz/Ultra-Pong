@@ -3,8 +3,8 @@
 [ext_resource type="Script" path="res://Main.cs" id="1_8th4n"]
 [ext_resource type="PackedScene" uid="uid://cse05e4dbaikg" path="res://Ball.tscn" id="2_5om6r"]
 [ext_resource type="Script" path="res://Clock.cs" id="2_dl4v6"]
-[ext_resource type="Script" path="res://Players.cs" id="3_1cda7"]
 [ext_resource type="PackedScene" uid="uid://dy1xuua4jy3cn" path="res://Choose Team.tscn" id="3_4o1i5"]
+[ext_resource type="Script" path="res://PlayersHandler.cs" id="3_gcrtf"]
 
 [sub_resource type="RectangleShape2D" id="8"]
 size = Vector2(1200, 128)
@@ -27,20 +27,16 @@ hinting = 2
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_uaqvs"]
 properties/0/path = NodePath("Left:text")
 properties/0/spawn = false
-properties/0/sync = false
-properties/0/watch = true
+properties/0/replication_mode = 2
 properties/1/path = NodePath("Right:text")
 properties/1/spawn = false
-properties/1/sync = false
-properties/1/watch = true
+properties/1/replication_mode = 2
 properties/2/path = NodePath("Left:theme_override_colors/font_color")
 properties/2/spawn = false
-properties/2/sync = false
-properties/2/watch = true
+properties/2/replication_mode = 2
 properties/3/path = NodePath("Right:theme_override_colors/font_color")
 properties/3/spawn = false
-properties/3/sync = false
-properties/3/watch = true
+properties/3/replication_mode = 2
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_v32wk"]
 size = Vector2(30, 1300)
@@ -49,11 +45,6 @@ size = Vector2(30, 1300)
 size = Vector2(30, 1300)
 
 [node name="Main" type="Node"]
-process_priority = 1
-process_physics_priority = 1
-process_thread_group = 2
-process_thread_group_order = 3
-process_thread_messages = 0
 script = ExtResource("1_8th4n")
 
 [node name="Network" type="Node" parent="."]
@@ -61,8 +52,8 @@ script = ExtResource("1_8th4n")
 [node name="Clock" type="Node" parent="Network"]
 script = ExtResource("2_dl4v6")
 
-[node name="Players" type="Node" parent="Network"]
-script = ExtResource("3_1cda7")
+[node name="PlayersHandler" type="Node" parent="Network"]
+script = ExtResource("3_gcrtf")
 
 [node name="World" type="Node2D" parent="."]
 

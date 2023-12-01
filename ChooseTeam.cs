@@ -12,19 +12,14 @@ public partial class ChooseTeam : ColorRect
 	
 	public override void _GuiInput(InputEvent @event)
 	{
-		if (@event is InputEventMouseButton mb)
-		{
-			if (mb.ButtonIndex == MouseButton.Left && mb.Pressed)
-			{
-				GetNode<Main>("/root/World").SelectTeam(Multiplayer.GetUniqueId().ToString(), int.Parse(Name));
-				GetParent().QueueFree();
-			}
-		}
+		if (@event is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) return;
+		GetNode<Main>("/root/Main").SelectTeam(Multiplayer.GetUniqueId().ToString(), int.Parse(Name));
+		GetParent().QueueFree();
 	}
 
 	public override void _Process(double delta)
 	{
-		foreach (var node in GetNode("/root/World/Players").GetChildren())
+		foreach (var node in GetNode("/root/Main/World/Players").GetChildren())
 		{
 			var player = (Player)node;
 			if (player.Number == int.Parse(Name))

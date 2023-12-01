@@ -7,9 +7,6 @@
 size = Vector2(30, 150)
 
 [node name="Player" type="CharacterBody2D"]
-process_thread_group = 1
-process_thread_group_order = 0
-process_thread_messages = 0
 collision_mask = 11
 motion_mode = 1
 script = ExtResource("1_l0q6y")

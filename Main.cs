@@ -2,7 +2,7 @@ using System;
 using Godot;
 using Godot.Collections;
 
-public partial class Main : Node2D
+public partial class Main : Node
 {
 	public override void _Ready()
 	{
@@ -57,9 +57,9 @@ public partial class Main : Node2D
 		player.Name = id;
 		player.Number = playerNumber;
 		
-		GetNode("Players").AddChild(player, true);
+		GetNode("World/Players").AddChild(player, true);
 		
-		if (GetNode("Players").GetChildren().Count >= 4)
+		if (GetNode("World/Players").GetChildren().Count >= 4)
 			StartGame();
 	}
 	
@@ -83,7 +83,7 @@ public partial class Main : Node2D
 
 	private void ResetGame(Vector2 ballPosition)
 	{
-		foreach (Node node in GetNode("Players").GetChildren())
+		foreach (var node in GetNode("Players").GetChildren())
 		{
 			var player = (Player)node;
 			player.SetPhysicsProcess(false);
@@ -92,7 +92,7 @@ public partial class Main : Node2D
 		}
 
 		GetNode<Ball>("Ball").Reset(ballPosition);
-		foreach (Node node in GetNode("Players").GetChildren())
+		foreach (var node in GetNode("Players").GetChildren())
 		{
 			var player = (Player)node;
 			player.SetPhysicsProcess(true);

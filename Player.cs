@@ -30,7 +30,7 @@ public partial class Player : CharacterBody2D
 		switch (IsLocalPlayer)
 		{
 			case false:
-				ProcessThreadGroupOrder = 1;
+				SetPhysicsProcess(false);
 				SetProcess(false);
 				break;
 			//Add rotation indicator
@@ -49,14 +49,14 @@ public partial class Player : CharacterBody2D
 		GetNode<Sprite2D>("RotationIndicator/Up").Modulate = color;
 	}
 
-	/*public override void _PhysicsProcess(double delta)
+	public override void _PhysicsProcess(double delta)
 	{
-		var input = (InputSynchronizer)GetNode<MultiplayerSynchronizer>("InputSynchronizer");
+		var direction = Input.GetVector("MoveLeft", "MoveRight", "MoveUp", "MoveDown");
 		
 		_speed = Global.Player.Speed;
 		
 		//Check boost
-		if (input.Boosting)
+		if (Input.IsActionPressed("Boost"))
 		{
 			_speed *= 3;
 			SetCollisionLayerValue(1,false);
@@ -70,7 +70,7 @@ public partial class Player : CharacterBody2D
 			SetCollisionMaskValue(2, true);
 		}
 
-		Velocity = input.Direction * _speed;
+		Velocity = direction * _speed;
 		MoveAndSlide();
 		
 		//Apply impulse to Ball
@@ -80,5 +80,15 @@ public partial class Player : CharacterBody2D
 			if (c.GetCollider() is RigidBody2D body)
 				body.ApplyImpulse(-c.GetNormal() * _speed/80F, c.GetPosition() - body.GlobalPosition);
 		}
-	}*/
+	}
+
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		GD.Print(@event.IsActionPressed("Boost"));
+		GetNode<PlayersHandler>("/root/Main/Network/PlayersHandler").FetchInputWrapper(
+			new PlayersHandler.State(Position, Rotation), 
+			new[]{@event.IsActionPressed("MoveLeft"),@event.IsActionPressed("MoveDown"),@event.IsActionPressed("MoveUp"),@event.IsActionPressed("MoveDown")},
+			@event.IsActionPressed("Boost"), Rotation
+			);
+	}
 }

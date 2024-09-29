@@ -1,110 +1,218 @@
+namespace UltraPong;
+
 using Godot;
 using static Godot.Input;
+using Color = Godot.Color;
 
 public partial class Player : CharacterBody2D
 {
-	[Export(PropertyHint.Range, "0,3,")]
-	public int Number { get; set; }
+	[Export] public PlayerStats Stats;
 
-	public Vector2 SpawnPoint { get; private set; }
-
-	public Color InitialColor { get; private set; }
+	public Device Device;
 	
-	private bool IsLocalPlayer => Multiplayer.GetUniqueId().ToString() == Name;
+	public uint InputStamp { get; set; }
+	public byte Number { get; set; }
 
-	private float _rotationDirection = -1F;
+	public Vector2 SpawnPoint => Stats.SpawnPoints[Number];
 
+	private Color InitialColor => Stats.ColorsArray[Number];
+
+	public int Id { get; set; }
+	
+	public bool IsLocalPlayer => Multiplayer.GetUniqueId() == Id;
+
+	private sbyte _rotationDirection = -1;
+	public Vector2 Direction { get; set; } = Vector2.Zero;
 	public bool Boosting { get; set; }
+	public float RotateTo { get; set; }
+	public double Overtime { get; set; }
 	
 	public override void _Ready()
 	{
-		SpawnPoint = Global.Player.SpawnPoints[Number];
-		InitialColor = Global.Player.ColorsArray[Number];
+		Name = Id.ToString() + Device.Type + Device.Number;
 		Position = SpawnPoint;
 		
 		var hitBox = (RectangleShape2D)GetNode<CollisionShape2D>("Collision").Shape;
-		hitBox.Size = Global.Player.Size;
+		hitBox.Size = Stats.Size;
 		
 		var rectangle = GetNode<ColorRect>("Rectangle");
-		rectangle.Size = Global.Player.Size;
+		rectangle.Size = Stats.Size;
 		rectangle.PivotOffset = rectangle.Size / 2;
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
 
-		if (IsLocalPlayer)
+		GetNode<Label>("Username").TopLevel = true;
+		
+		SetProcessUnhandledInput(IsLocalPlayer);
+		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
+		
+		if (!IsLocalPlayer) return;
+		if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.ExclusiveFullscreen)
 			MouseMode = MouseModeEnum.Captured;
-		SetProcess(IsLocalPlayer);
-        GetNode<Node2D>("RotationIndicator").Visible = IsLocalPlayer;
-		SetProcessInput(IsLocalPlayer);
+
+		var indicatorModel = new Sprite2D
+			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01F, 0.01F) };
+		if (Device.Type == 'K')
+		{
+			var rotationIndicator = new Node2D{Name = "Rotation Indicator"};
+			
+			indicatorModel.Position = new Vector2(0F, -Stats.Size.Y/2.5F);
+			indicatorModel.Name = "Up";
+			rotationIndicator.AddChild(indicatorModel, true);
+
+			var downIndicator = new Sprite2D{Name = "Down", Position = new Vector2(0F, Stats.Size.Y/2.5F),
+				Texture = indicatorModel.Texture, Modulate  = indicatorModel.Modulate, Scale = indicatorModel.Scale};
+			rotationIndicator.AddChild(downIndicator, true);
+			
+			AddChild(rotationIndicator, true);
+			return;
+		}
+
+		indicatorModel.Name = "Rotation Indicator";
+		indicatorModel.TopLevel = true;
+		AddChild(indicatorModel, true);
 	}
 
 	public override void _Process(double delta)
 	{
-		var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation/2F)) };
-		GetNode<Sprite2D>("RotationIndicator/Down").Modulate = color;
+		var username = GetNode<Label>("Username");
+		username.Position = new Vector2(-username.Size.X/2, username.Size.Y/2 - Stats.Size.Y) + Position;
 
-		color.A = Mathf.Abs(Mathf.Sin(Rotation/2F));
-		GetNode<Sprite2D>("RotationIndicator/Up").Modulate = color;
+		//Check Overtime
+		if (Overtime > 0)
+		{
+			Scale -= new Vector2(0F, 0.05F * (float)delta);
+			Overtime -= delta;
+			SetPhysicsProcess(false);
+		}
+		else
+			SetPhysicsProcess(true);
+		
+		//Process rotation indicator
+		if (!IsLocalPlayer)
+			return;
+		if (Device.Type == 'K')
+		{
+			var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation / 2F)) };
+			GetNode<Sprite2D>("Rotation Indicator/Down").Modulate = color;
+
+			color.A = Mathf.Abs(Mathf.Sin(Rotation / 2F));
+			GetNode<Sprite2D>("Rotation Indicator/Up").Modulate = color;
+			return;
+		}
+		
+		GetNode<Sprite2D>("Rotation Indicator").GlobalPosition =
+			Position + 
+			GetVector("Rotate Left", "Rotate Right", "Rotate Up", "Rotate Down") * 
+			Stats.Size.Y/2.5F;
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
-		if (IsLocalPlayer)
+		//Check boost
+		var rectangle = GetNode<ColorRect>("Rectangle");
+		float speed;
+		if (Boosting)
 		{
-			Boosting = IsActionPressed("Boost");
-            Velocity = GetVector("MoveLeft", "MoveRight", "MoveUp", "MoveDown") * Global.Player.Speed;
-        }
-
-        //Check boost
-        var rectangle = GetNode<ColorRect>("Rectangle");
-        if (Boosting)
-        {
 			rectangle.Color = Colors.Yellow;
-            Velocity *= 3;
-            SetCollisionLayerValue(1, false);
-            SetCollisionMaskValue(1, false);
-            SetCollisionMaskValue(2, false);
-        }
-        else
-        {
+			speed = Stats.Speed * 3;
+			SetCollisionLayerValue(1, false);
+			SetCollisionMaskValue(1, false);
+			SetCollisionMaskValue(2, false);
+		}
+		else
+		{
 			rectangle.Color = InitialColor;
-            SetCollisionLayerValue(1, true);
-            SetCollisionMaskValue(1, true);
-            SetCollisionMaskValue(2, true);
-        }
-
-        MoveAndSlide();
+			speed = Stats.Speed;
+			SetCollisionLayerValue(1, true);
+			SetCollisionMaskValue(1, true);
+			SetCollisionMaskValue(2, true);
+		}
 		
+		Velocity = Direction * speed;
+		MoveAndSlide();
+		
+		var maxRotation = Stats.MaxRotation * (float)delta;
+		Rotate(Device.Type == 'K' ? Mathf.Clamp(RotateTo, -maxRotation, maxRotation) : RotateTo);
+		RotateTo = 0F;
+
 		//Apply impulse to Ball
 		for (sbyte i = 0; i < GetSlideCollisionCount(); i++)
 		{
 			var c = GetSlideCollision(i);
-			if (c.GetCollider() is RigidBody2D body)
-				body.ApplyImpulse(-c.GetNormal() * Global.Player.Speed/80F, c.GetPosition() - body.GlobalPosition);
+			if (c.GetCollider() is not Ball ball) continue;
+
+			var sfx = ball.GetNode<AudioStreamPlayer2D>("SoundFX");
+			sfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / ball.Stats.MaxSpeed;
+			sfx.Play();
+				
+			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80F, c.GetPosition() - ball.GlobalPosition);
+
+			if (!Multiplayer.IsServer()) 
+				continue;
+			var possessionTimer = GetNodeOrNull<PossessionTimer>("../../Possession Timer");
+			if (possessionTimer is null) 
+				continue;
+			var timeDisplay = GetNode<Label>("../../Time Display");
+			switch (timeDisplay.Position.X)
+			{
+				case < 1F when Position.X > 960F:
+					timeDisplay.Position = new Vector2(960F, timeDisplay.Position.Y);
+					possessionTimer.Stop();
+					possessionTimer.Start();
+					break;
+				case > 959F when Position.X < 960F:
+					timeDisplay.Position = new Vector2(0F, timeDisplay.Position.Y);
+					possessionTimer.Stop();
+					possessionTimer.Start();
+					break;
+			}
+			break;
 		}
 	}
-
+	
 	public override void _UnhandledInput(InputEvent @event)
 	{
-        if (@event.IsActionPressed("ChangeRotation"))
-        {
-            _rotationDirection *= -1;
-            GetParent().GetNode<Node2D>("RotationIndicator").RotationDegrees += 180F;
+		if (@event.Device != Device.Number)
 			return;
-        }
-
-        var rotation = 0F;
-        if (@event is InputEventMouseMotion motion)
+		
+		Boosting = IsActionPressed("Boost" + Device.Type);
+		Direction = GetVector("Move Left" + Device.Type, "Move Right" + Device.Type, "Move Up" + Device.Type, "Move Down" + Device.Type);
+		
+		if (@event.IsActionPressed("Change Rotation"))
 		{
-            rotation = _rotationDirection * motion.Relative.X * Global.Player.Sensitivity;
-            Rotate(rotation);	
+			_rotationDirection *= -1;
+			GetNode<Node2D>("Rotation Indicator").RotationDegrees += 180F;
+			return;
 		}
 
-        GetNode<PlayersHandler>("/root/Main/Network/PlayersHandler").FetchInputWrapper
-		(
-			new PlayersHandler.State(Position, Rotation), 
-			new[]{IsActionPressed("MoveLeft"), IsActionPressed("MoveDown"), IsActionPressed("MoveUp"), IsActionPressed("MoveDown")},
-			IsActionPressed("Boost"), rotation
-		);
+		var rotation = 0F;
+		switch (@event)
+		{
+			case InputEventMouseMotion mouseMotion when Device.Type == 'K':
+				rotation = _rotationDirection * mouseMotion.Relative.X * Stats.Sensitivity;
+				RotateTo = rotation;
+				break;
+			case InputEventJoypadMotion when Device.Type == 'C':
+			{
+				var to = GetVector("Rotate Left", "Rotate Right", "Rotate Up", "Rotate Down");
+				if (to.Length() >= 1F)
+				{
+					rotation = Rotation;
+					Rotation = Mathf.Pi / 2 + to.Angle();
+					rotation = Rotation - rotation;
+				}
+				break;
+			}
+		}
+		
+		if (!Multiplayer.IsServer())
+			GetNode<PlayersHandler>("../../../Network/PlayersHandler").FetchInputWrapper
+			(
+				Name,
+				new PlayersHandler.State(Position, Rotation, InputStamp++), 
+				GetVector("Move Left" + Device.Type, "Move Right" + Device.Type, "Move Up" + Device.Type, "Move Down" + Device.Type), 
+				IsActionPressed("Boost"+ Device.Type), rotation
+			);
 	}
 }

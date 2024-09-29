@@ -4,49 +4,56 @@ using Godot;
 
 public partial class Clock : Node
 {
-	private ulong _latency, _clientClock, _deltaLatency;
+	private ulong _latency, _deltaLatency;
+	public ulong ClientClock;
 	private readonly List<ulong> _latencyArray = new();
 
-	public override void _EnterTree()
+	public override void _Ready()
 	{
+		SetPhysicsProcess(!Multiplayer.IsServer());
+		if (Multiplayer.IsServer())
+			return;
+		RpcId(1, nameof(FetchServerTime), Time.GetTicksUsec());
+		
 		var timer = new Timer();
 		timer.WaitTime = 0.5;
 		timer.Autostart = true;
 		timer.Connect("timeout", new Callable(this, nameof(DetermineLatency)));
 		AddChild(timer);
 	}
-	
+
 	public override void _PhysicsProcess(double delta)
 	{
-		_clientClock += (ulong)(delta * 1000000 + _deltaLatency);
+		ClientClock += (ulong)(delta * 1_000_000D + _deltaLatency);
 		_deltaLatency = 0;
 	}
 		
-	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = 5)]
 	private void FetchServerTime(ulong clientTime)
 	{
 		RpcId(Multiplayer.GetRemoteSenderId(), nameof(ReturnServerTime), Time.GetTicksUsec(), clientTime);
 	}
 	
-	[Rpc(CallLocal = true)]
-	private void ReturnServerTime(ulong clientTime, ulong serverTime)
+	[Rpc(TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void ReturnServerTime(ulong serverTime, ulong clientTime)
 	{
 		_latency = (Time.GetTicksUsec() - clientTime)/2;
-		_clientClock = serverTime + _latency;
+		ClientClock = serverTime + _latency;
 	}
 	
+	//Signaled through Timer
 	private void DetermineLatency()
 	{
 		RpcId(1, nameof(FetchLatency), Time.GetTicksUsec());
 	}
 	
-	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true)]
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = 5)]
 	private void FetchLatency(ulong clientTime)
 	{ 
 		RpcId(Multiplayer.GetRemoteSenderId(), nameof(ReturnLatency), clientTime);
 	}
 	
-	[Rpc(TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, CallLocal = true)]
+	[Rpc(TransferMode = MultiplayerPeer.TransferModeEnum.Reliable,TransferChannel = 5)]
 	private void ReturnLatency(ulong clientTime)
 	{
 		_latencyArray.Add((Time.GetTicksUsec() - clientTime)/2);

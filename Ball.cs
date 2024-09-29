@@ -1,49 +1,31 @@
+namespace UltraPong;
 using Godot;
-using System;
 
 
 public partial class Ball : RigidBody2D
 {
-	private const float MaxSpeed = Global.Player.Speed * 4F;
+	[Export] public BallStats Stats;
 	
 	private bool _reset;
 	private Vector2 _resetPosition;
-	
-	private Vector2 _serverPosition = new(960F, 540F), _serverLinearVelocity = Vector2.Zero;
-	private float _serverRotation, _serverAngularVelocity;
 
-	public void Reset(Vector2 position)
-	{
-		_resetPosition = position;
-		_reset = true;
-	}
+	public BallHandler.State ServerState { get; set; }
 	
 	public override void _EnterTree()
 	{
 		var hitBox = (CircleShape2D)GetNode<CollisionShape2D>("Collision").Shape;
-		hitBox.Radius = Global.Player.Size.Y / 7;
+		hitBox.Radius = Stats.Size;
 		GetNode<Sprite2D>("Sprite2D").Scale = new Vector2(hitBox.Radius * 0.0022F, hitBox.Radius * 0.0022F);
+		ServerState = new BallHandler.State(Position, Rotation, LinearVelocity, AngularVelocity);
 	}
 	
 	public override void _IntegrateForces(PhysicsDirectBodyState2D state)
 	{
-		var t = Transform2D.Identity;
-		//Set position to server's position
-		if (!Multiplayer.IsServer())
-		{
-			Rotation = _serverRotation;
-			t.Origin = _serverPosition;
-			state.Transform = t;
-			state.LinearVelocity = _serverLinearVelocity;
-			state.AngularVelocity = _serverAngularVelocity;
-		}
-		else
-			Rpc(nameof(GetServerState), Position, Rotation, LinearVelocity, AngularVelocity);
-
 		//Set Ball Max Speed
-		if (Math.Abs(state.LinearVelocity.X) > MaxSpeed || Math.Abs(state.LinearVelocity.Y) > MaxSpeed)
-			state.LinearVelocity = state.LinearVelocity.Normalized() * MaxSpeed;
-
+		if (state.LinearVelocity.Length() > Stats.MaxSpeed)
+			state.LinearVelocity = state.LinearVelocity.Normalized() * Stats.MaxSpeed;
+		
+		var t = Transform2D.Identity;
 		//Reset Ball's position if wanted
 		if (_reset)
 		{
@@ -55,14 +37,41 @@ public partial class Ball : RigidBody2D
 
 			_reset = false;
 		}
+		
+		//Set state to server's state
+		if (Multiplayer.IsServer())
+		{
+			GetNode<BallHandler>("../../Network/BallHandler").ReturnBallStateWrapper(new BallHandler.State(Position, Rotation, LinearVelocity, AngularVelocity));
+			return;
+		}
+		
+		Rotation = ServerState.Rotation;
+		t.Origin = ServerState.Position;
+		state.Transform = t;
+		state.LinearVelocity = ServerState.LinearVelocity;
+		state.AngularVelocity = ServerState.AngularVelocity;
 	}
 
-	[Rpc(CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered, TransferChannel = 1)]
-	private void GetServerState(Vector2 position, float rotation, Vector2 linearVelocity, float angularVelocity)
+	public void Reset(Vector2 position)
 	{
-		_serverPosition = position;
-		_serverRotation = rotation;
-		_serverLinearVelocity = linearVelocity;
-		_serverAngularVelocity = angularVelocity;
+		_resetPosition = position;
+		_reset = true;
+	}
+
+	private void OnCollided(Node body)
+	{
+		if (body is Player)
+			return;
+		
+		if (body.Name == "MidField")
+		{
+			if (Multiplayer.IsServer())
+				GetNodeOrNull<PossessionTimer>("../../World/Possession Timer")?.Stop();
+			return;
+		}
+
+		var sfx = GetNode<AudioStreamPlayer2D>("SoundFX");
+		sfx.PitchScale = 0.5F + LinearVelocity.Length()/Stats.MaxSpeed;
+		sfx.Play();
 	}
 }

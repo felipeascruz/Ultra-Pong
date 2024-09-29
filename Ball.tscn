@@ -1,10 +1,18 @@
-[gd_scene load_steps=5 format=3 uid="uid://cse05e4dbaikg"]
+[gd_scene load_steps=8 format=3 uid="uid://cse05e4dbaikg"]
 
 [ext_resource type="Script" path="res://Ball.cs" id="1_swupv"]
+[ext_resource type="Script" path="res://BallStats.cs" id="2_0erra"]
 [ext_resource type="Texture2D" uid="uid://crc7uaopnc2dd" path="res://BallSprite.png" id="2_hfhs0"]
+[ext_resource type="AudioStream" uid="uid://d25846vlhhx4a" path="res://Bounce.wav" id="4_ykk65"]
 
 [sub_resource type="PhysicsMaterial" id="7"]
 bounce = 1.0
+
+[sub_resource type="Resource" id="Resource_8r300"]
+script = ExtResource("2_0erra")
+Size = 21.0
+MaxSpeed = 1720.0
+SpawnPoints = PackedVector2Array(384, 540, 1536, 540, 960, 540)
 
 [sub_resource type="CircleShape2D" id="2"]
 radius = 21.0
@@ -18,7 +26,11 @@ collision_mask = 5
 mass = 0.01
 physics_material_override = SubResource("7")
 gravity_scale = 0.0
+can_sleep = false
+contact_monitor = true
+max_contacts_reported = 1
 script = ExtResource("1_swupv")
+Stats = SubResource("Resource_8r300")
 metadata/_edit_group_ = true
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
@@ -30,3 +42,11 @@ process_thread_group = 1
 process_thread_group_order = 0
 process_thread_messages = 0
 shape = SubResource("2")
+
+[node name="SoundFX" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("4_ykk65")
+volume_db = -3.0
+panning_strength = 1.35
+area_mask = 0
+
+[connection signal="body_entered" from="." to="." method="OnCollided"]

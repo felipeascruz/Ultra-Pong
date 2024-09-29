@@ -1,27 +1,55 @@
+namespace UltraPong;
 using Godot;
 
 public partial class Menu : Control
 {
+	private int _port = 1910;
+	private static UserStats UserStats => GD.Load<UserStats>("res://UserStats.res");
+	private static PlayerStats PlayerStats => GD.Load<PlayerStats>("res://PlayerStats.res");
+
+	public override void _Ready()
+	{
+		GetNode<LineEdit>("Username").Text = UserStats.Username;
+		GetNode<HSlider>("Sensitivity").Value = PlayerStats.Sensitivity * 100D;
+	}
+
 	private void JoinRoom()
 	{
-		string ip = GetNode<LineEdit>("Room").Text ?? "localhost";
+		SaveStats();
+		
+		string ip = GetNode<LineEdit>("Room").Text;
 		
 		var peer = new ENetMultiplayerPeer();
 
-		var err = peer.CreateClient(ip, Global.Port);
-		Multiplayer.MultiplayerPeer = peer;
+		var err = peer.CreateClient(ip, _port);
 
 		if (err != Error.Ok)
-			Multiplayer.MultiplayerPeer.Close();
+		{
+			GD.PrintErr(err);
+			return;
+		}
+		
+		Multiplayer.MultiplayerPeer = peer;
+
+		var connectedCallable = new Callable(this, nameof(Connected));
+		var disconnectedCallable = new Callable(this, nameof(Disconnected));
+		
+		if (Multiplayer.IsConnected("connected_to_server", connectedCallable) && Multiplayer.IsConnected("connection_failed", disconnectedCallable))
+		{
+			GD.Print("disconnected");
+			Multiplayer.Disconnect("connected_to_server", connectedCallable);
+			Multiplayer.Disconnect("connection_failed", disconnectedCallable);
+		}
 		else
 		{
-			Multiplayer.Connect("connected_to_server", new Callable(this, nameof(Connected)));
-			Multiplayer.Connect("connection_failed", new Callable(this, nameof(Disconnected)));
+			Multiplayer.Connect("connected_to_server", connectedCallable);
+			Multiplayer.Connect("connection_failed", disconnectedCallable);
 		}
 	}
 	
 	private void Disconnected()
 	{
+		GD.Print("Unable to connect to server");
 		Multiplayer.MultiplayerPeer.Close();
 	}
 	
@@ -32,17 +60,15 @@ public partial class Menu : Control
 	
 	private void CreateRoom()
 	{
+		SaveStats();
+		
 		var peer = new ENetMultiplayerPeer();
-
-		var err = peer.CreateServer(Global.Port, 4);
-		Multiplayer.MultiplayerPeer = peer;
-
-		if (err != Error.Ok)
-		{
-			Multiplayer.MultiplayerPeer.Close();
+		
+		if (peer.CreateServer(_port) != Error.Ok)
 			return;
-		}
-
+		
+		Multiplayer.MultiplayerPeer = peer;
+		
 		//Get User IP through OS Environment Variable
 		string ip = IP.ResolveHostname(OS.HasFeature("windows") ?
 			OS.GetEnvironment("COMPUTERNAME") : OS.GetEnvironment("HOSTNAME"), (IP.Type)1);
@@ -50,5 +76,13 @@ public partial class Menu : Control
 		GD.Print("Server running on IP: " + ip);
 
 		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+
+	private void SaveStats()
+	{
+		UserStats.Username = GetNode<LineEdit>("Username").Text;
+		ResourceSaver.Save(UserStats, "res://UserStats.res");
+		PlayerStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
+		ResourceSaver.Save(PlayerStats, "res://PlayerStats.res");
 	}
 }

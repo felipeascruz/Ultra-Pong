@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3 uid="uid://brqdgyfqfpalm"]
+[gd_scene load_steps=4 format=3 uid="uid://brqdgyfqfpalm"]
 
 [ext_resource type="Script" path="res://Menu.cs" id="1"]
+[ext_resource type="Texture2D" uid="uid://disbt3swx42n5" path="res://Leave.png" id="2_45bo6"]
+[ext_resource type="Script" path="res://Quit.cs" id="3_8rbid"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -25,6 +27,8 @@ offset_left = 665.0
 offset_top = 637.0
 offset_right = 1229.0
 offset_bottom = 754.0
+focus_neighbor_top = NodePath("../Username")
+focus_neighbor_bottom = NodePath("../Create")
 placeholder_text = "Room"
 secret = true
 
@@ -34,6 +38,8 @@ offset_left = 667.0
 offset_top = 809.0
 offset_right = 891.0
 offset_bottom = 899.0
+focus_neighbor_top = NodePath("../Room")
+focus_neighbor_right = NodePath("../Join")
 text = "Create"
 
 [node name="Join" type="Button" parent="."]
@@ -42,6 +48,8 @@ offset_left = 992.0
 offset_top = 816.0
 offset_right = 1216.0
 offset_bottom = 906.0
+focus_neighbor_left = NodePath("../Create")
+focus_neighbor_top = NodePath("../Room")
 text = "Join"
 
 [node name="Sensitivity" type="HSlider" parent="."]
@@ -67,5 +75,19 @@ text = "Sensitivity"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="Quit" type="Button" parent="."]
+offset_left = 1794.0
+offset_top = 5.0
+offset_right = 1917.0
+offset_bottom = 124.0
+theme_override_colors/icon_normal_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+icon = ExtResource("2_45bo6")
+flat = true
+icon_alignment = 1
+expand_icon = true
+script = ExtResource("3_8rbid")
+
 [connection signal="pressed" from="Create" to="." method="CreateRoom"]
 [connection signal="pressed" from="Join" to="." method="JoinRoom"]
+[connection signal="pressed" from="Quit" to="Quit" method="OnPressed"]

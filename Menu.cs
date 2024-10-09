@@ -11,6 +11,7 @@ public partial class Menu : Control
 	{
 		GetNode<LineEdit>("Username").Text = UserStats.Username;
 		GetNode<HSlider>("Sensitivity").Value = PlayerStats.Sensitivity * 100D;
+		GetNode<LineEdit>("Username").GrabFocus();
 	}
 
 	private void JoinRoom()

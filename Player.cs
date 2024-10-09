@@ -29,7 +29,7 @@ public partial class Player : CharacterBody2D
 	
 	public override void _Ready()
 	{
-		Name = Id.ToString() + Device.Type + Device.Number;
+		Name = Id.ToString() + Device;
 		Position = SpawnPoint;
 		
 		var hitBox = (RectangleShape2D)GetNode<CollisionShape2D>("Collision").Shape;
@@ -103,7 +103,7 @@ public partial class Player : CharacterBody2D
 		
 		GetNode<Sprite2D>("Rotation Indicator").GlobalPosition =
 			Position + 
-			GetVector("Rotate Left", "Rotate Right", "Rotate Up", "Rotate Down") * 
+			GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device) * 
 			Stats.Size.Y/2.5F;
 	}
 
@@ -176,8 +176,8 @@ public partial class Player : CharacterBody2D
 		if (@event.Device != Device.Number)
 			return;
 		
-		Boosting = IsActionPressed("Boost" + Device.Type);
-		Direction = GetVector("Move Left" + Device.Type, "Move Right" + Device.Type, "Move Up" + Device.Type, "Move Down" + Device.Type);
+		Boosting = IsActionPressed("Boost" + Device);
+		Direction = GetVector("Move Left" + Device, "Move Right" + Device, "Move Up" + Device, "Move Down" + Device);
 		
 		if (@event.IsActionPressed("Change Rotation"))
 		{
@@ -195,7 +195,7 @@ public partial class Player : CharacterBody2D
 				break;
 			case InputEventJoypadMotion when Device.Type == 'C':
 			{
-				var to = GetVector("Rotate Left", "Rotate Right", "Rotate Up", "Rotate Down");
+				var to = GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device);
 				if (to.Length() >= 1F)
 				{
 					rotation = Rotation;
@@ -211,8 +211,8 @@ public partial class Player : CharacterBody2D
 			(
 				Name,
 				new PlayersHandler.State(Position, Rotation, InputStamp++), 
-				GetVector("Move Left" + Device.Type, "Move Right" + Device.Type, "Move Up" + Device.Type, "Move Down" + Device.Type), 
-				IsActionPressed("Boost"+ Device.Type), rotation
+				GetVector("Move Left" + Device, "Move Right" + Device, "Move Up" + Device, "Move Down" + Device), 
+				IsActionPressed("Boost" + Device), rotation
 			);
 	}
 }

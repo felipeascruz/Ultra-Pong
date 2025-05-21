@@ -3,6 +3,7 @@ namespace UltraPong;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Godot;
 public partial class WorldHandler : Node
 {
@@ -45,7 +46,7 @@ public partial class WorldHandler : Node
 		
 		//Spawn previous players
 		foreach (Player player in GetNode(World + "Players").GetChildren())
-			RpcId(id, nameof(Spawn), player.GetNode<Label>("Username").Text, player.Id, player.Number, player.Device.Number, player.Device.Type);
+			RpcId(id, nameof(Spawn), player.GetNode<Label>("Nickname").Text, player.Id, player.Number, player.Device.Number, player.Device.Type);
 	}
 
 	private void PeerExited(int id)
@@ -61,11 +62,12 @@ public partial class WorldHandler : Node
 	{
 		Rpc(nameof(Despawn), Multiplayer.GetUniqueId().ToString() + device.Type + device.Number);
 		
-		Rpc(nameof(Spawn), GD.Load<UserStats>("res://UserStats.res").Username, Multiplayer.GetUniqueId(), playerNumber, device.Number, device.Type);
+		var nickname = JsonSerializer.Deserialize<UserStats>(GD.Load<string>("userStats.json")).Nickname;
+		Rpc(nameof(Spawn), nickname, Multiplayer.GetUniqueId(), playerNumber, device.Number, device.Type);
 	}
 	
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable, TransferChannel = 3)]
-	public async void Spawn(string username, int id, byte playerNumber, int deviceNumber, char deviceType)
+	public async void Spawn(string nickname, int id, byte playerNumber, int deviceNumber, char deviceType)
 	{
 		if (Multiplayer.GetRemoteSenderId() != id && Multiplayer.GetRemoteSenderId() != 1)
 			return;
@@ -79,13 +81,13 @@ public partial class WorldHandler : Node
 			await ToSignal(GetTree().CreateTimer(0.1D), "timeout");
 		
 		var player = GD.Load<PackedScene>("res://Player.tscn").Instantiate<Player>();
-		player.GetNode<Label>("Username").Text = username.Length > 50 ? username[..50] : username;
+		player.GetNode<Label>("Nickname").Text = nickname.Length > 50 ? nickname[..50] : nickname;
 		player.Id = id;
 		player.Number = playerNumber;
 		player.Device = new Device(deviceNumber, deviceType);
 		
 		players.AddChild(player, true);
-		GD.Print($"{username} spawned as player {playerNumber} ");
+		GD.Print($"{nickname} spawned as player {playerNumber} ");
 
 		if (players.GetChildren().Cast<Player>().Count(node => node.Number == playerNumber) > 1)
 		{
@@ -112,7 +114,7 @@ public partial class WorldHandler : Node
 		if (player == null)
 			return;
 		
-		GD.Print(player.GetNode<Label>("Username").Text + " despawned");
+		GD.Print(player.GetNode<Label>("Nickname").Text + " despawned");
 		
 		player.QueueFree();
 		foreach (var state in GetNode<PlayersHandler>("../PlayersHandler").StatesBuffer)

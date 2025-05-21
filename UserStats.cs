@@ -1,13 +1,6 @@
 using Godot;
 
-public partial class UserStats : Resource
+public class UserStats
 {
-	[Export] public string Username;
-	
-	public UserStats() : this("") {}
-
-	public UserStats(string username)
-	{
-		Username = username;
-	}
+	public string Nickname;
 }

@@ -99,7 +99,7 @@ public partial class PlayersHandler : Node
 				player.Position = player.Position.Lerp(newPosition, 0.1F);
 
 			if (Math.Abs(player.Rotation - newRotation) > 0.5F)
-				player.Rotation = (float)Mathf.LerpAngle(player.Rotation, newRotation, 1F);
+				player.Rotation = Mathf.LerpAngle(player.Rotation, newRotation, 1F);
 		}
 	}
 

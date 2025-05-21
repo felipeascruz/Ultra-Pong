@@ -1,0 +1,12 @@
+[gd_resource type="Resource" load_steps=2 format=3 uid="uid://8a4n0vkxwpv3"]
+
+[ext_resource type="Script" path="res://PlayerStats.cs" id="1_23h05"]
+
+[resource]
+script = ExtResource("1_23h05")
+Size = Vector2(30, 150)
+Speed = 430.0
+MaxRotation = 0.07
+Sensitivity = 0.001
+SpawnPoints = PackedVector2Array(320, 360, 320, 720, 1600, 360, 1600, 720)
+ColorsArray = PackedColorArray(1, 0, 0, 1, 1, 0.388235, 0.278431, 1, 0, 0, 1, 1, 0, 1, 1, 1)

@@ -1,8 +1,8 @@
 [gd_scene load_steps=4 format=3 uid="uid://brqdgyfqfpalm"]
 
 [ext_resource type="Script" path="res://Menu.cs" id="1"]
-[ext_resource type="Texture2D" uid="uid://disbt3swx42n5" path="res://Leave.png" id="2_45bo6"]
-[ext_resource type="Script" path="res://Quit.cs" id="3_8rbid"]
+[ext_resource type="Texture2D" uid="uid://disbt3swx42n5" path="res://Leave.png" id="2_etv2e"]
+[ext_resource type="Script" path="res://Quit.cs" id="3_l22av"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -76,17 +76,18 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Quit" type="Button" parent="."]
+layout_mode = 0
 offset_left = 1794.0
 offset_top = 5.0
 offset_right = 1917.0
 offset_bottom = 124.0
 theme_override_colors/icon_normal_color = Color(1, 1, 1, 1)
 theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
-icon = ExtResource("2_45bo6")
+icon = ExtResource("2_etv2e")
 flat = true
 icon_alignment = 1
 expand_icon = true
-script = ExtResource("3_8rbid")
+script = ExtResource("3_l22av")
 
 [connection signal="pressed" from="Create" to="." method="CreateRoom"]
 [connection signal="pressed" from="Join" to="." method="JoinRoom"]

@@ -39,6 +39,10 @@ movie_writer/movie_file="C:/Users/Felipe/Documents/Godot/Godot Projects/Ultra Po
 movie_writer/disable_vsync=true
 naming/default_signal_callback_name="On{signal_name}"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/Holepunch/plugin.cfg")
+
 [gui]
 
 common/drop_mouse_on_gui_input_disabled=true

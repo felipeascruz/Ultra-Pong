@@ -7,12 +7,11 @@ public partial class Menu : Control
 {
 	private int _port = 1910;
 	private static UserStats UserStats => JsonSerializer.Deserialize<UserStats>(GD.Load<string>("res://userStats.json"));
-	private static PlayerStats PlayerStats => GD.Load<PlayerStats>("res://PlayerStats.res");
 
 	public override void _Ready()
 	{
 		GetNode<LineEdit>("Username").Text = UserStats.Nickname;
-		GetNode<HSlider>("Sensitivity").Value = PlayerStats.Sensitivity * 100D;
+		GetNode<HSlider>("Sensitivity").Value = UserStats.Sensitivity * 100D;
 		GetNode<LineEdit>("Username").GrabFocus();
 	}
 	
@@ -84,10 +83,9 @@ public partial class Menu : Control
 	private void SaveStats()
 	{
 		UserStats.Nickname = GetNode<LineEdit>("Username").Text;
+		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
+		
 		using var saveFile = FileAccess.Open("user://userStats.json", FileAccess.ModeFlags.Write);
 		saveFile.StoreString(JsonSerializer.Serialize(UserStats));
-		
-		PlayerStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
-		ResourceSaver.Save(PlayerStats, "res://PlayerStats.res");
 	}
 }

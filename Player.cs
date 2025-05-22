@@ -1,12 +1,18 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace UltraPong;
 
 using Godot;
 using static Godot.Input;
 using Color = Godot.Color;
+using System.Text.Json;
 
 public partial class Player : CharacterBody2D
 {
-	[Export] public PlayerStats Stats;
+	private static readonly PlayerStats Stats = JsonSerializer.Deserialize<PlayerStats>(GD.Load<string>("res://playerStats.json"));
+	
+	private static float Sensitivity = JsonSerializer.Deserialize<UserStats>(GD.Load<string>("res://userStats.json")).Sensitivity;
 
 	public Device Device;
 	
@@ -143,7 +149,7 @@ public partial class Player : CharacterBody2D
 			if (c.GetCollider() is not Ball ball) continue;
 
 			var sfx = ball.GetNode<AudioStreamPlayer2D>("SoundFX");
-			sfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / ball.Stats.MaxSpeed;
+			sfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
 			sfx.Play();
 				
 			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80F, c.GetPosition() - ball.GlobalPosition);
@@ -190,7 +196,7 @@ public partial class Player : CharacterBody2D
 		switch (@event)
 		{
 			case InputEventMouseMotion mouseMotion when Device.Type == 'K':
-				rotation = _rotationDirection * mouseMotion.Relative.X * Stats.Sensitivity;
+				rotation = _rotationDirection * mouseMotion.Relative.X * Sensitivity;
 				RotateTo = rotation;
 				break;
 			case InputEventJoypadMotion when Device.Type == 'C':

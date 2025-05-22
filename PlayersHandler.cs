@@ -9,7 +9,9 @@ using Godot;
 
 public partial class PlayersHandler : Node
 {
-	private readonly float _maxRotation = GD.Load<PlayerStats>("res://PlayerStats.res").MaxRotation;
+	private readonly float _maxRotation = 
+		JsonSerializer.Deserialize<PlayerStats>(GD.Load<string>("res://playerStats.json")).MaxRotation;
+	
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
 	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = new();
 	private const byte InterpolationMs = 50;

@@ -1,5 +1,6 @@
 using Godot;
-using System;
+
+namespace UltraPong;
 
 public partial class Quit : Button
 {

@@ -1,6 +1,7 @@
-using Godot;
 using System.Globalization;
-using UltraPong;
+using Godot;
+
+namespace UltraPong;
 
 public partial class PossessionTimer : Timer
 {

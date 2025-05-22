@@ -1,6 +1,7 @@
-using System;
 using System.Collections.Generic;
 using Godot;
+
+namespace UltraPong;
 
 public partial class Clock : Node
 {

@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://dfu6g7r6en4iw"]
+[gd_scene load_steps=20 format=3 uid="uid://dfu6g7r6en4iw"]
 
 [ext_resource type="PackedScene" uid="uid://cse05e4dbaikg" path="res://Ball.tscn" id="2_5om6r"]
 [ext_resource type="Script" path="res://Clock.cs" id="2_aa8at"]
@@ -6,9 +6,7 @@
 [ext_resource type="Script" path="res://PlayersHandler.cs" id="3_gcrtf"]
 [ext_resource type="Script" path="res://BallHandler.cs" id="4_4430d"]
 [ext_resource type="Script" path="res://WorldHandler.cs" id="4_vm6o0"]
-[ext_resource type="Script" path="res://addons/Holepunch/holepunch_node.gd" id="5_5ls5r"]
 [ext_resource type="Script" path="res://World.cs" id="5_d2jlf"]
-[ext_resource type="Resource" uid="uid://d3fa3yyg3mq1x" path="res://BallStats.res" id="7_0l8d7"]
 
 [sub_resource type="FontFile" id="FontFile_uvo4p"]
 cache/0/16/0/ascent = 0.0
@@ -99,11 +97,6 @@ script = ExtResource("4_vm6o0")
 
 [node name="BallHandler" type="Node" parent="Network"]
 script = ExtResource("4_4430d")
-
-[node name="HolePunch" type="Node" parent="Network"]
-script = ExtResource("5_5ls5r")
-rendevouz_address = "35.173.69.207"
-rendevouz_port = 0
 
 [node name="World" type="Node2D" parent="."]
 process_priority = 3
@@ -198,7 +191,6 @@ debug_color = Color(0, 0.552941, 0.266667, 0.419608)
 process_priority = 2
 process_physics_priority = 2
 position = Vector2(960, 540)
-Stats = ExtResource("7_0l8d7")
 
 [node name="Score" type="Control" parent="World"]
 visible = false

@@ -1,13 +1,11 @@
 namespace UltraPong;
 
 using Godot;
-using static System.Text.Json.JsonSerializer;
-using static System.IO.File;
 
 public partial class Menu : Control
 {
 	private int _port = 1910;
-	private static UserStats UserStats => Deserialize<UserStats>(ReadAllText("res://userStats.json"));
+	private static UserStats UserStats => JsonFileAccess.Read<UserStats>("user://userStats.json");
 
 	public override void _Ready()
 	{
@@ -18,7 +16,7 @@ public partial class Menu : Control
 	
 	private void JoinRoom()
 	{
-		SaveStats();
+		SaveUserStats();
 		
 		string ip = GetNode<LineEdit>("Room").Text;
 		
@@ -63,7 +61,7 @@ public partial class Menu : Control
 	
 	private void CreateRoom()
 	{
-		SaveStats();
+		SaveUserStats();
 		
 		var peer = new ENetMultiplayerPeer();
 		
@@ -81,12 +79,11 @@ public partial class Menu : Control
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 
-	private void SaveStats()
+	private void SaveUserStats()
 	{
 		UserStats.Nickname = GetNode<LineEdit>("Username").Text;
 		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
 		
-		using var saveFile = FileAccess.Open("user://userStats.json", FileAccess.ModeFlags.Write);
-		saveFile.StoreString(Serialize(UserStats));
+		JsonFileAccess.Write("user://userStats.json", UserStats);
 	}
 }

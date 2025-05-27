@@ -1,13 +1,11 @@
 namespace UltraPong;
 
 using Godot;
-using static System.Text.Json.JsonSerializer;
-using static System.IO.File;
 
 
 public partial class Ball : RigidBody2D
 {
-	public static BallStats Stats => Deserialize<BallStats>(ReadAllText("res://ballStats.json"));
+	public static BallStats Stats => JsonFileAccess.Read<BallStats>("res://ballStats.json");
 	
 	private bool _reset;
 	private Vector2 _resetPosition;

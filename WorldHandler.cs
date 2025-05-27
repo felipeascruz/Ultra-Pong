@@ -5,12 +5,10 @@ namespace UltraPong;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using static System.Text.Json.JsonSerializer;
-using static System.IO.File;
 using Godot;
 public partial class WorldHandler : Node
 {
-	private readonly Vector2[] _ballSpawnPoints = Deserialize<BallStats>(ReadAllText("res://ballStats.json")).SpawnPoints;
+	private readonly Vector2[] _ballSpawnPoints =JsonFileAccess.Read<BallStats>("res://ballStats.json").SpawnPoints;
 	private const string World = "../../World/";
 	
 	public override void _Ready()
@@ -65,7 +63,7 @@ public partial class WorldHandler : Node
 	{
 		Rpc(nameof(Despawn), Multiplayer.GetUniqueId().ToString() + device.Type + device.Number);
 		
-		var nickname = Deserialize<UserStats>(ReadAllText("userStats.json")).Nickname;
+		var nickname = JsonFileAccess.Read<UserStats>("userStats.json").Nickname;
 		Rpc(nameof(Spawn), nickname, Multiplayer.GetUniqueId(), playerNumber, device.Number, device.Type);
 	}
 	

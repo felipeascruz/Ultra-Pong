@@ -2,9 +2,9 @@ namespace UltraPong;
 
 using Godot;
 
-public class BallStats
+public abstract class BallStats
 {
-	public float Size { get; init; }
-	public float MaxSpeed { get; init; }
-	public Vector2[] SpawnPoints { get; init; }
+	public float Size { get; set; }
+	public float MaxSpeed { get; set; }
+	public Vector2[] SpawnPoints { get; set; }
 }

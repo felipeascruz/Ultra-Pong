@@ -5,7 +5,7 @@ public partial class ChooseTeam : ColorRect
 {
 	public override void _Ready()
 	{
-		var playerStats = GD.Load<PlayerStats>("res://PlayerStats.res");
+		var playerStats = JsonFileAccess.Read<PlayerStats>("res://playerStats.json");
 		
 		Size = playerStats.Size;
 		PivotOffset = Size / 2;

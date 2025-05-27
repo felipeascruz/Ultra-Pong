@@ -3,14 +3,12 @@ namespace UltraPong;
 using Godot;
 using static Godot.Input;
 using Color = Godot.Color;
-using static System.Text.Json.JsonSerializer;
-using static System.IO.File;
 
 public partial class Player : CharacterBody2D
 {
-	private static readonly PlayerStats Stats = Deserialize<PlayerStats>(ReadAllText("res://playerStats.json"));
+	private static readonly PlayerStats Stats = JsonFileAccess.Read<PlayerStats>("res://playerStats.json");
 	
-	private static readonly float Sensitivity = Deserialize<UserStats>(ReadAllText("res://userStats.json")).Sensitivity;
+	private static readonly float Sensitivity = JsonFileAccess.Read<UserStats>("user://userStats.json").Sensitivity;
 
 	public Device Device;
 	

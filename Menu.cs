@@ -1,12 +1,13 @@
-using System.Text.Json;
-
 namespace UltraPong;
+
 using Godot;
+using static System.Text.Json.JsonSerializer;
+using static System.IO.File;
 
 public partial class Menu : Control
 {
 	private int _port = 1910;
-	private static UserStats UserStats => JsonSerializer.Deserialize<UserStats>(GD.Load<string>("res://userStats.json"));
+	private static UserStats UserStats => Deserialize<UserStats>(ReadAllText("res://userStats.json"));
 
 	public override void _Ready()
 	{
@@ -86,6 +87,6 @@ public partial class Menu : Control
 		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
 		
 		using var saveFile = FileAccess.Open("user://userStats.json", FileAccess.ModeFlags.Write);
-		saveFile.StoreString(JsonSerializer.Serialize(UserStats));
+		saveFile.StoreString(Serialize(UserStats));
 	}
 }

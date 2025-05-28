@@ -8,7 +8,7 @@ using System.Linq;
 using Godot;
 public partial class WorldHandler : Node
 {
-	private readonly Vector2[] _ballSpawnPoints =JsonFileAccess.Read<BallStats>("res://ballStats.json").SpawnPoints;
+	private readonly Vector2[] _ballSpawnPoints = JsonFileAccess.Read<BallStats>("res://ballStats.json").SpawnPoints;
 	private const string World = "../../World/";
 	
 	public override void _Ready()
@@ -17,12 +17,6 @@ public partial class WorldHandler : Node
 
 		if (!Multiplayer.IsServer())
 			return;
-
-		if (DisplayServer.GetName() == "headless" || OS.HasFeature("dedicated_server"))
-		{
-			Engine.PhysicsTicksPerSecond = 30;
-			Engine.MaxPhysicsStepsPerFrame = 4;
-		}
 
 		Multiplayer.Connect("peer_connected", new Callable(this, nameof(PeerEntered)));
 		Multiplayer.Connect("peer_disconnected", new Callable(this, nameof(PeerExited)));

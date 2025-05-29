@@ -20,8 +20,8 @@ public partial class World : Node2D
 		else if (@event.IsActionPressed("Show Labels"))
 			foreach (Player player in GetNode("Players").GetChildren())
 			{
-				var username = player.GetNode<Label>("Username");
-				username.Visible = !username.Visible;
+				var nickname = player.GetNode<Label>("Nickname");
+				nickname.Visible = !nickname.Visible;
 			}
 	}
 }

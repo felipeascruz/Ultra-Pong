@@ -5,13 +5,13 @@ using Godot;
 public partial class Menu : Control
 {
 	private int _port = 1910;
-	private static UserStats UserStats => JsonFileAccess.Read<UserStats>("user://userStats.json");
+	private static readonly UserStats UserStats = JsonFileAccess.Read<UserStats>("user://userStats.json");
 
 	public override void _Ready()
 	{
-		GetNode<LineEdit>("Username").Text = UserStats.Nickname;
+		GetNode<LineEdit>("Nickname").Text = UserStats.Nickname;
 		GetNode<HSlider>("Sensitivity").Value = UserStats.Sensitivity * 100D;
-		GetNode<LineEdit>("Username").GrabFocus();
+		GetNode<LineEdit>("Nickname").GrabFocus();
 	}
 	
 	private void JoinRoom()
@@ -81,7 +81,7 @@ public partial class Menu : Control
 
 	private void SaveUserStats()
 	{
-		UserStats.Nickname = GetNode<LineEdit>("Username").Text;
+		UserStats.Nickname = GetNode<LineEdit>("Nickname").Text;
 		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
 		
 		JsonFileAccess.Write("user://userStats.json", UserStats);

@@ -9,10 +9,9 @@ public abstract class JsonFileAccess
 {
     public static T Read<T>(string path) where T : new()
     {
-        GD.Print("reading from " + path);
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.WriteRead);
         
-        if (file.GetAsText().Length != 0) return JsonSerializer.Deserialize<T>(file.GetAsText());
+        if (file.GetLength() != 0) {GD.Print("File exists");return JsonSerializer.Deserialize<T>(file.GetAsText());}
         
         var obj = new T();
         Write(path, obj);
@@ -21,7 +20,6 @@ public abstract class JsonFileAccess
 
     public static void Write<T>(string path, T obj)
     {   
-        GD.Print("writing into " + path);
         using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
         file.StoreString(JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
     }

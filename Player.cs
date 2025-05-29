@@ -43,7 +43,7 @@ public partial class Player : CharacterBody2D
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
 
-		GetNode<Label>("Username").TopLevel = true;
+		GetNode<Label>("Nickname").TopLevel = true;
 		
 		SetProcessUnhandledInput(IsLocalPlayer);
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
@@ -77,8 +77,8 @@ public partial class Player : CharacterBody2D
 
 	public override void _Process(double delta)
 	{
-		var username = GetNode<Label>("Username");
-		username.Position = new Vector2(-username.Size.X/2, username.Size.Y/2 - Stats.Size.Y) + Position;
+		var nickname = GetNode<Label>("Nickname");
+		nickname.Position = new Vector2(-nickname.Size.X/2, nickname.Size.Y/2 - Stats.Size.Y) + Position;
 
 		//Check Overtime
 		if (Overtime > 0)

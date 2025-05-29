@@ -5,7 +5,7 @@ using Godot;
 
 public partial class Ball : RigidBody2D
 {
-	public static BallStats Stats => JsonFileAccess.Read<BallStats>("res://ballStats.json");
+	public static readonly BallStats Stats = JsonFileAccess.Read<BallStats>("res://ballStats.json");
 	
 	private bool _reset;
 	private Vector2 _resetPosition;

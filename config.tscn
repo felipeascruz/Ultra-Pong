@@ -1,0 +1,56 @@
+[gd_scene format=3 uid="uid://gi2xmvqn0jx"]
+
+[node name="Config" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_right = 1798.0
+offset_bottom = 968.0
+alignment = 1
+
+[node name="Labels" type="VBoxContainer" parent="HBoxContainer"]
+layout_mode = 2
+
+[node name="WindowMode" type="Label" parent="HBoxContainer/Labels"]
+layout_mode = 2
+text = "Window Mode"
+
+[node name="Resolution" type="Label" parent="HBoxContainer/Labels"]
+layout_mode = 2
+text = "Resolution"
+
+[node name="V-Sync" type="Label" parent="HBoxContainer/Labels"]
+layout_mode = 2
+text = "V-Sync
+"
+
+[node name="Buttons" type="VBoxContainer" parent="HBoxContainer"]
+layout_mode = 2
+
+[node name="WindowMode" type="OptionButton" parent="HBoxContainer/Buttons"]
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Full Screen"
+popup/item_0/id = 1
+popup/item_1/text = "Windowed"
+popup/item_1/id = 1
+
+[node name="Resolution" type="OptionButton" parent="HBoxContainer/Buttons"]
+layout_mode = 2
+selected = 0
+item_count = 3
+popup/item_0/text = "1080p"
+popup/item_1/text = "720p"
+popup/item_1/id = 1
+popup/item_2/text = "360p"
+popup/item_2/id = 2
+
+[node name="CheckBox" type="CheckBox" parent="HBoxContainer/Buttons"]
+layout_mode = 2

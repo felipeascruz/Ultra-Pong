@@ -1,0 +1,12 @@
+[gd_resource type="Resource" load_steps=2 format=3 uid="uid://dxo4wpfrry58w"]
+
+[ext_resource type="Script" path="res://Config.cs" id="1_nneiq"]
+
+[resource]
+script = ExtResource("1_nneiq")
+WindowMode = 4
+Resolution = Vector2(1920, 1080)
+VSync = false
+MSAA = 3
+FXAA = 2
+TAA = false

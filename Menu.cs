@@ -1,37 +1,83 @@
+namespace UltraPong;
+
 using Godot;
 
 public partial class Menu : Control
 {
-	private void JoinRoom()
-	{
-		string ip = GetNode<LineEdit>("Room").Text ?? "localhost";
-		
-		var peer = new ENetMultiplayerPeer();
+	private int _port = 1910;
+	private static readonly UserStats UserStats = JsonFileAccess.Read<UserStats>("user://userStats.json");
 
-		var err = peer.CreateClient(ip, Global.Port);
-		Multiplayer.MultiplayerPeer = peer;
-		
-		if (err != Error.Ok || Multiplayer.IsServer())
-			return;
-		GetTree().ChangeSceneToFile("res://Main.tscn");
+	public override void _Ready()
+	{
+		GetNode<LineEdit>("Nickname").Text = UserStats.Nickname;
+		GetNode<HSlider>("Sensitivity").Value = UserStats.Sensitivity * 100D;
+		GetNode<LineEdit>("Nickname").GrabFocus();
 	}
 	
 	private void CreateRoom()
 	{
-		var peer = new ENetMultiplayerPeer();
-
-		var err = peer.CreateServer(Global.Port, 4);
-		Multiplayer.MultiplayerPeer = peer;
+		SaveUserStats();
 		
-		if (err != Error.Ok)
+		var peer = new ENetMultiplayerPeer();
+		
+		if (peer.CreateServer(_port) != Error.Ok)
 			return;
-
-		//Get User IP through OS Environment Variable
-		string ip = IP.ResolveHostname(OS.HasFeature("windows") ?
-			OS.GetEnvironment("COMPUTERNAME") : OS.GetEnvironment("HOSTNAME"), (IP.Type)1);
-
-		GD.Print("Server running on IP: " + ip);
+		
+		Multiplayer.MultiplayerPeer = peer;
 
 		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+	
+	private void JoinRoom()
+	{
+		SaveUserStats();
+		
+		string ip = GetNode<LineEdit>("Room").Text;
+		
+		var peer = new ENetMultiplayerPeer();
+
+		var err = peer.CreateClient(ip, _port);
+
+		if (err != Error.Ok)
+		{
+			GD.PrintErr(err);
+			return;
+		}
+		
+		Multiplayer.MultiplayerPeer = peer;
+
+		var connectedCallable = new Callable(this, nameof(Connected));
+		var disconnectedCallable = new Callable(this, nameof(Disconnected));
+		
+		if (Multiplayer.IsConnected("connected_to_server", connectedCallable) && Multiplayer.IsConnected("connection_failed", disconnectedCallable))
+		{
+			GD.Print("disconnected");
+			Multiplayer.Disconnect("connected_to_server", connectedCallable);
+			Multiplayer.Disconnect("connection_failed", disconnectedCallable);
+		}
+		else
+		{
+			Multiplayer.Connect("connected_to_server", connectedCallable);
+			Multiplayer.Connect("connection_failed", disconnectedCallable);
+		}
+	}
+	
+	private void Disconnected()
+	{
+		GD.Print("Unable to connect to server");
+		Multiplayer.MultiplayerPeer.Close();
+	}
+	
+	private void Connected()
+	{
+		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+
+	private void SaveUserStats()
+	{
+		UserStats.Nickname = GetNode<LineEdit>("Nickname").Text;
+		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value/100F;
+		
+		JsonFileAccess.Write("user://userStats.json", UserStats);
 	}
 }

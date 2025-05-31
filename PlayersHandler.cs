@@ -14,8 +14,7 @@ public partial class PlayersHandler : Node
 	
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
 	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = new();
-	private const byte InterpolationMs = 50;
-	private readonly JsonSerializerOptions _jsonOptions = new() { Converters = { new StateConverter() } };
+	private const byte InterpolationMs = 30;
 	private Node Players => GetNode("../../World/Players");
 
 	public void FetchInputWrapper(string name, State state , Vector2 direction, bool boosting, float rotation)
@@ -55,14 +54,14 @@ public partial class PlayersHandler : Node
 
 		if (serverStates.Count == 0) return;
 		
-		var states = JsonSerializer.Serialize(serverStates, _jsonOptions);
+		var states = JsonSerializer.Serialize(serverStates);
 		Rpc(nameof(ReturnPlayersStates),Time.GetTicksUsec(), states);
 	}
 	
 	[Rpc(TransferChannel = 1)]
 	private void ReturnPlayersStates(ulong timestamp, string playersStates)
 	{
-		var states = JsonSerializer.Deserialize<Dictionary<string, State>>(playersStates, _jsonOptions);
+		var states = JsonSerializer.Deserialize<Dictionary<string, State>>(playersStates);
 		foreach (Player player in GetNode("../../World/Players").GetChildren())
 			if (player.IsLocalPlayer && states.ContainsKey(player.Name))
 			{
@@ -127,17 +126,20 @@ public partial class PlayersHandler : Node
 			
 			var playerNode = Players.GetNode<Player>(player.Key);
 			playerNode.GlobalPosition = latestState.Position.Lerp(nextState.Position, interpolationFactor);
-			playerNode.Rotation = (float)Mathf.LerpAngle(latestState.Rotation, nextState.Rotation, interpolationFactor);
+			playerNode.Rotation = Mathf.LerpAngle(latestState.Rotation, nextState.Rotation, interpolationFactor);
 			playerNode.Boosting = nextState.Boosting;
 		}
 	}
 	
+	[JsonConverter(typeof(StateConverter))]
 	public class State
 	{
 		public Vector2 Position;
-		public readonly float Rotation;
-		public readonly uint InputStamp;
-		public readonly bool Boosting;
+		public float Rotation;
+		public uint InputStamp;
+		public bool Boosting;
+
+		public State() { }
 		
 		public State(Vector2 position, float rotation, uint inputStamp = 0, bool boosting = false)
 		{
@@ -155,18 +157,20 @@ public partial class PlayersHandler : Node
 			using var doc = JsonDocument.ParseValue(ref reader);
 			var root = doc.RootElement;
 
-			return new State(
-				new Vector2(root.GetProperty("Position").GetProperty("X").GetSingle(),
-					root.GetProperty("Position").GetProperty("Y").GetSingle()), 
-				root.GetProperty("Rotation").GetSingle(), 
-				root.GetProperty("InputStamp").GetUInt32(),
-				root.GetProperty("Boosting").GetBoolean());
+			var position = root.GetProperty("Position");
+			return new State
+			{
+				Position = new Vector2(position.GetProperty("X").GetSingle(), position.GetProperty("Y").GetSingle()),
+				Rotation = root.GetProperty("Rotation").GetSingle(),
+				InputStamp = root.GetProperty("InputStamp").GetUInt32(),
+				Boosting = root.GetProperty("Boosting").GetBoolean()
+			};
 		}
 
 		public override void Write(Utf8JsonWriter writer, State value, JsonSerializerOptions options)
 		{
 			writer.WriteStartObject();
-
+			
 			writer.WriteStartObject("Position");
 			writer.WriteNumber("X", value.Position.X);
 			writer.WriteNumber("Y", value.Position.Y);

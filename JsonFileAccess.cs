@@ -9,18 +9,42 @@ public abstract class JsonFileAccess
 {
     public static T Read<T>(string path) where T : new()
     {
-        using var file = FileAccess.Open(path, FileAccess.ModeFlags.WriteRead);
+        if (!FileAccess.FileExists(path)) return CreateNewFile(path + " does not exist.");
         
-        if (file.GetLength() != 0) {GD.Print("File exists");return JsonSerializer.Deserialize<T>(file.GetAsText());}
+        using var file = FileAccess.Open(path, FileAccess.ModeFlags.Read);
+        var content = file.GetAsText();
+
+        if (string.IsNullOrWhiteSpace(content)) return CreateNewFile(path + " is empty.");
         
-        var obj = new T();
-        Write(path, obj);
-        return obj;
+        try
+        {
+            return JsonSerializer.Deserialize<T>(content);
+        }
+        catch (JsonException ex)
+        {
+            return CreateNewFile($"Failed to deserialize {path}: {ex.Message}.");
+        }
+
+        T CreateNewFile(string message)
+        {
+            GD.Print(message + " Creating new file.");
+            var obj = new T();
+            Write(path, obj);
+            return obj;
+        }
     }
 
     public static void Write<T>(string path, T obj)
-    {   
-        using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
-        file.StoreString(JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
+    {
+        try
+        {
+            using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
+            file.StoreString(JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"Error writing to file: {path}. {e.Message}");
+        }
+ 
     }
 }

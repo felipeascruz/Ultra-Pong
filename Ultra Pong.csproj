@@ -14,4 +14,12 @@
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="addons\Holepunch\holepunch.gd" />
+    <Content Include="addons\Holepunch\holepunch_node.gd" />
+    <Content Include="addons\Holepunch\plugin.cfg" />
+    <Content Include="ballStats.json" />
+    <Content Include="playerStats.json" />
+    <Content Include="userStats.json" />
+  </ItemGroup>
 </Project>

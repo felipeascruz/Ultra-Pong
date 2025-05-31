@@ -1,9 +1,0 @@
-[gd_resource type="Resource" load_steps=2 format=3 uid="uid://6j8p62ikm8rq"]
-
-[ext_resource type="Script" path="res://BallStats.cs" id="1_iafgn"]
-
-[resource]
-script = ExtResource("1_iafgn")
-Size = 21.0
-MaxSpeed = 1720.0
-SpawnPoints = PackedVector2Array(384, 540, 1536, 540, 960, 540)

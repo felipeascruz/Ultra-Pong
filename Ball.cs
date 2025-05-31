@@ -2,7 +2,6 @@ namespace UltraPong;
 
 using Godot;
 
-
 public partial class Ball : RigidBody2D
 {
 	public static readonly BallStats Stats = JsonFileAccess.Read<BallStats>("res://ballStats.json");

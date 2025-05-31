@@ -14,6 +14,20 @@ public partial class Menu : Control
 		GetNode<LineEdit>("Nickname").GrabFocus();
 	}
 	
+	private void CreateRoom()
+	{
+		SaveUserStats();
+		
+		var peer = new ENetMultiplayerPeer();
+		
+		if (peer.CreateServer(_port) != Error.Ok)
+			return;
+		
+		Multiplayer.MultiplayerPeer = peer;
+
+		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+	
 	private void JoinRoom()
 	{
 		SaveUserStats();
@@ -56,26 +70,6 @@ public partial class Menu : Control
 	
 	private void Connected()
 	{
-		GetTree().ChangeSceneToFile("res://Main.tscn");
-	}
-	
-	private void CreateRoom()
-	{
-		SaveUserStats();
-		
-		var peer = new ENetMultiplayerPeer();
-		
-		if (peer.CreateServer(_port) != Error.Ok)
-			return;
-		
-		Multiplayer.MultiplayerPeer = peer;
-		
-		//Get User IP through OS Environment Variable
-		string ip = IP.ResolveHostname(OS.HasFeature("windows") ?
-			OS.GetEnvironment("COMPUTERNAME") : OS.GetEnvironment("HOSTNAME"), (IP.Type)1);
-
-		GD.Print("Server running on IP: " + ip);
-
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 

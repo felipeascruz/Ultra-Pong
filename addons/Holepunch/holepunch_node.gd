@@ -11,10 +11,10 @@ signal session_registered
 var server_udp = PacketPeerUDP.new()
 var peer_udp = PacketPeerUDP.new()
 
-#Set the rendevouz address to the IP address of your third party server
-@export var rendevouz_address = "" 
-#Set the rendevouz port to the port of your third party server
-@export var rendevouz_port = 4000
+#Set the rendezvous address to the IP address of your third party server
+@export var rendezvous_address = "" 
+#Set the rendezvous port to the port of your third party server
+@export var rendezvous_port = 4000
 #This is the range of ports you will search if you hear no response from the first port tried
 @export var port_cascade_range = 10
 #The amount of messages of the same type you will send before cascading or giving up
@@ -22,10 +22,10 @@ var peer_udp = PacketPeerUDP.new()
 
 
 var found_server = false
-var recieved_peer_info = false
-var recieved_peer_greet = false
-var recieved_peer_confirm = false
-var recieved_peer_go = false
+var received_peer_info = false
+var received_peer_greet = false
+var received_peer_confirm = false
+var received_peer_go = false
 
 var is_host = false
 
@@ -58,17 +58,17 @@ func _process(delta):
 	if peer_udp.get_available_packet_count() > 0:
 		var array_bytes = peer_udp.get_packet()
 		var packet_string = array_bytes.get_string_from_ascii()
-		if not recieved_peer_greet:
+		if not received_peer_greet:
 			if packet_string.begins_with(PEER_GREET):
 				var m = packet_string.split(":")
 				_handle_greet_message(m[1], int(m[2]), int(m[3]))
 
-		if not recieved_peer_confirm:
+		if not received_peer_confirm:
 			if packet_string.begins_with(PEER_CONFIRM):
 				var m = packet_string.split(":")
 				_handle_confirm_message(m[2], m[1], m[4], m[3])
 
-		elif not recieved_peer_go:
+		elif not received_peer_go:
 			if packet_string.begins_with(PEER_GO):
 				var m = packet_string.split(":")
 				_handle_go_message(m[1])
@@ -85,14 +85,14 @@ func _process(delta):
 					_send_client_to_server()
 			found_server=true
 
-		if not recieved_peer_info:
+		if not received_peer_info:
 			if packet_string.begins_with(SERVER_INFO):
 				server_udp.close()
 				packet_string = packet_string.right(6)
 				if packet_string.length() > 2:
 					var m = packet_string.split(":")
 					peer[m[0]] = {"port":m[2], "address":m[1]}
-					recieved_peer_info = true
+					received_peer_info = true
 					start_peer_contact()
 
 
@@ -101,7 +101,7 @@ func _handle_greet_message(peer_name, peer_port, my_port):
 		own_port = my_port
 		peer_udp.close()
 		peer_udp.listen(own_port, "*")
-	recieved_peer_greet = true
+	received_peer_greet = true
 
 
 func _handle_confirm_message(peer_name, peer_port, my_port, is_host):
@@ -114,11 +114,11 @@ func _handle_confirm_message(peer_name, peer_port, my_port, is_host):
 		host_port = peer[peer_name].port
 	peer_udp.close()
 	peer_udp.listen(own_port, "*")
-	recieved_peer_confirm = true
+	received_peer_confirm = true
 
 
 func _handle_go_message(peer_name):
-	recieved_peer_go = true
+	received_peer_go = true
 	emit_signal("hole_punched", int(own_port), int(host_port), host_address)
 	peer_udp.close()
 	p_timer.stop()
@@ -136,7 +136,7 @@ func _cascade_peer(add, peer_port):
 
 func _ping_peer():
 	
-	if not recieved_peer_confirm and greets_sent < response_window:
+	if not received_peer_confirm and greets_sent < response_window:
 		for p in peer.keys():
 			peer_udp.set_dest_address(peer[p].address, int(peer[p].port))
 			var buffer = PackedByteArray()
@@ -147,19 +147,19 @@ func _ping_peer():
 				print("Receiving no confirm. Starting port cascade")
 				#if the other player hasn't responded we should try more ports
 
-	if not recieved_peer_confirm and greets_sent == response_window:
+	if not received_peer_confirm and greets_sent == response_window:
 		for p in peer.keys():
 			_cascade_peer(peer[p].address, int(peer[p].port))
 		greets_sent += 1
 
-	if recieved_peer_greet and not recieved_peer_go:
+	if received_peer_greet and not received_peer_go:
 		for p in peer.keys():
 			peer_udp.set_dest_address(peer[p].address, int(peer[p].port))
 			var buffer = PackedByteArray()
 			buffer.append_array(("confirm:"+str(own_port)+":"+client_name+":"+str(is_host)+":"+peer[p].port).to_utf8_buffer())
 			peer_udp.put_packet(buffer)
 
-	if  recieved_peer_confirm:
+	if  received_peer_confirm:
 		for p in peer.keys():
 			peer_udp.set_dest_address(peer[p].address, int(peer[p].port))
 			var buffer = PackedByteArray()
@@ -188,7 +188,7 @@ func start_peer_contact():
 func finalize_peers(id):
 	var buffer = PackedByteArray()
 	buffer.append_array((EXCHANGE_PEERS+str(id)).to_utf8_buffer())
-	server_udp.set_dest_address(rendevouz_address, rendevouz_port)
+	server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 	server_udp.put_packet(buffer)
 
 
@@ -196,7 +196,7 @@ func finalize_peers(id):
 func checkout():
 	var buffer = PackedByteArray()
 	buffer.append_array((CHECKOUT_CLIENT+client_name).to_utf8_buffer())
-	server_udp.set_dest_address(rendevouz_address, rendevouz_port)
+	server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 	server_udp.put_packet(buffer)
 
 
@@ -205,18 +205,18 @@ func start_traversal(id, is_player_host, player_name):
 	if server_udp.is_bound():
 		server_udp.close()
 
-	var err = server_udp.bind(rendevouz_port, "*")
+	var err = server_udp.bind(rendezvous_port, "*")
 	if err != OK:
-		print("Error listening on port: " + str(rendevouz_port) + " to server: " + rendevouz_address)
+		print("Error listening on port: " + str(rendezvous_port) + " to server: " + rendezvous_address)
 	else:
 		print("Listening")
 	is_host = is_player_host
 	client_name = player_name
 	found_server = false
-	recieved_peer_info = false
-	recieved_peer_greet = false
-	recieved_peer_confirm = false
-	recieved_peer_go = false
+	received_peer_info = false
+	received_peer_greet = false
+	received_peer_confirm = false
+	received_peer_go = false
 	peer = {}
 
 	ports_tried = 0
@@ -228,7 +228,7 @@ func start_traversal(id, is_player_host, player_name):
 		var buffer = PackedByteArray()
 		buffer.append_array((REGISTER_SESSION+session_id+":"+str(MAX_PLAYER_COUNT)).to_utf8_buffer())
 		server_udp.close()
-		server_udp.set_dest_address(rendevouz_address, rendevouz_port)
+		server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 		server_udp.put_packet(buffer)
 	else:
 		_send_client_to_server()
@@ -240,7 +240,7 @@ func _send_client_to_server():
 	var buffer = PackedByteArray()
 	buffer.append_array((REGISTER_CLIENT+client_name+":"+session_id).to_utf8_buffer())
 	server_udp.close()
-	server_udp.set_dest_address(rendevouz_address, rendevouz_port)
+	server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 	server_udp.put_packet(buffer)
 
 
@@ -252,4 +252,3 @@ func _ready():
 	get_node("/root/").call_deferred("add_child", p_timer)
 	p_timer.timeout.connect(_ping_peer)
 	p_timer.wait_time = 0.1
-	start_traversal("1", true, "Mr. Ganso")

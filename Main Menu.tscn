@@ -5,7 +5,7 @@
 [ext_resource type="Script" path="res://Quit.cs" id="3_l22av"]
 [ext_resource type="Script" path="res://addons/Holepunch/holepunch_node.gd" id="4_nvod0"]
 
-[node name="Control" type="Control"]
+[node name="Menu" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,7 +14,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="Username" type="LineEdit" parent="."]
+[node name="Nickname" type="LineEdit" parent="."]
 layout_mode = 0
 offset_left = 665.0
 offset_top = 407.0
@@ -28,7 +28,7 @@ offset_left = 665.0
 offset_top = 637.0
 offset_right = 1229.0
 offset_bottom = 754.0
-focus_neighbor_top = NodePath("../Username")
+focus_neighbor_top = NodePath("../Nickname")
 focus_neighbor_bottom = NodePath("../Create")
 placeholder_text = "Room"
 secret = true
@@ -92,6 +92,8 @@ script = ExtResource("3_l22av")
 
 [node name="HolePunch" type="Node" parent="."]
 script = ExtResource("4_nvod0")
+rendezvous_address = "104.41.46.74"
+rendezvous_port = 1910
 
 [connection signal="pressed" from="Create" to="." method="CreateRoom"]
 [connection signal="pressed" from="Join" to="." method="JoinRoom"]

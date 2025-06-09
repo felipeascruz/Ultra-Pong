@@ -12,13 +12,13 @@ var server_udp = PacketPeerUDP.new()
 var peer_udp = PacketPeerUDP.new()
 
 #Set the rendezvous address to the IP address of your third party server
-@export var rendezvous_address = "" 
+var rendezvous_address = "20.206.244.22" 
 #Set the rendezvous port to the port of your third party server
-@export var rendezvous_port = 4000
+var rendezvous_port = 1910
 #This is the range of ports you will search if you hear no response from the first port tried
-@export var port_cascade_range = 10
+var port_cascade_range = 10
 #The amount of messages of the same type you will send before cascading or giving up
-@export var response_window = 5
+var response_window = 5
 
 
 var found_server = false
@@ -51,13 +51,14 @@ const PEER_GO = "go"
 const SERVER_OK = "ok"
 const SERVER_INFO = "peers"
 
-const MAX_PLAYER_COUNT = 2
+const MAX_PLAYER_COUNT = 4
 
 # warning-ignore:unused_argument
 func _process(delta):
 	if peer_udp.get_available_packet_count() > 0:
 		var array_bytes = peer_udp.get_packet()
 		var packet_string = array_bytes.get_string_from_ascii()
+		print('Received from peer: ' + packet_string)
 		if not received_peer_greet:
 			if packet_string.begins_with(PEER_GREET):
 				var m = packet_string.split(":")
@@ -76,6 +77,7 @@ func _process(delta):
 	if server_udp.get_available_packet_count() > 0:
 		var array_bytes = server_udp.get_packet()
 		var packet_string = array_bytes.get_string_from_ascii()
+		print('Received from server: ' + packet_string)
 		if packet_string.begins_with(SERVER_OK):
 			var m = packet_string.split(":")
 			own_port = int( m[1] )
@@ -88,19 +90,17 @@ func _process(delta):
 		if not received_peer_info:
 			if packet_string.begins_with(SERVER_INFO):
 				server_udp.close()
-				packet_string = packet_string.right(6)
-				if packet_string.length() > 2:
-					var m = packet_string.split(":")
-					peer[m[0]] = {"port":m[2], "address":m[1]}
-					received_peer_info = true
-					start_peer_contact()
+				var m = packet_string.split(":")
+				peer[m[1]] = {"port":m[3], "address":m[2]}
+				received_peer_info = true
+				start_peer_contact()
 
 
 func _handle_greet_message(peer_name, peer_port, my_port):
 	if own_port != my_port:
 		own_port = my_port
 		peer_udp.close()
-		peer_udp.listen(own_port, "*")
+		peer_udp.bind(own_port, "*")
 	received_peer_greet = true
 
 
@@ -113,7 +113,7 @@ func _handle_confirm_message(peer_name, peer_port, my_port, is_host):
 		host_address = peer[peer_name].address
 		host_port = peer[peer_name].port
 	peer_udp.close()
-	peer_udp.listen(own_port, "*")
+	peer_udp.bind(own_port, "*")
 	received_peer_confirm = true
 
 
@@ -135,7 +135,6 @@ func _cascade_peer(add, peer_port):
 
 
 func _ping_peer():
-	
 	if not received_peer_confirm and greets_sent < response_window:
 		for p in peer.keys():
 			peer_udp.set_dest_address(peer[p].address, int(peer[p].port))
@@ -173,15 +172,16 @@ func _ping_peer():
 			set_process(false)
 
 
-func start_peer_contact():	
-	server_udp.put_packet("goodbye".to_utf8_buffer())
+func start_peer_contact():
+	var err = server_udp.put_packet("goodbye".to_utf8_buffer())
 	server_udp.close()
 	if peer_udp.is_bound():
 		peer_udp.close()
-	var err = peer_udp.listen(own_port, "*")
+	err = peer_udp.bind(own_port, "*")
 	if err != OK:
-		print("Error listening on port: " + str(own_port) +" Error: " + str(err))
+		print("Error binding on: " + str(own_port) +" Error: " + str(err))
 	p_timer.start()
+	print("Started peer contact")
 
 
 #this function can be called to the server if you want to end the holepunch before the server closes the session
@@ -201,15 +201,15 @@ func checkout():
 
 
 #Call this function when you want to start the holepunch process
-func start_traversal(id, is_player_host, player_name):
+func start_traversal(id, is_player_host, player_name, max_players = MAX_PLAYER_COUNT):
 	if server_udp.is_bound():
 		server_udp.close()
 
 	var err = server_udp.bind(rendezvous_port, "*")
 	if err != OK:
-		print("Error listening on port: " + str(rendezvous_port) + " to server: " + rendezvous_address)
+		print("Error binding on: " + rendezvous_address + ":" + str(rendezvous_port))
 	else:
-		print("Listening")
+		print("Binding to: " + rendezvous_address + ":" + str(rendezvous_port))
 	is_host = is_player_host
 	client_name = player_name
 	found_server = false
@@ -222,11 +222,13 @@ func start_traversal(id, is_player_host, player_name):
 	ports_tried = 0
 	greets_sent = 0
 	gos_sent = 0
+	if id.is_empty():
+		id = "1"
 	session_id = id
 	
 	if (is_host):
 		var buffer = PackedByteArray()
-		buffer.append_array((REGISTER_SESSION+session_id+":"+str(MAX_PLAYER_COUNT)).to_utf8_buffer())
+		buffer.append_array((REGISTER_SESSION+session_id+":"+str(max_players)).to_utf8_buffer())
 		server_udp.close()
 		server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 		server_udp.put_packet(buffer)

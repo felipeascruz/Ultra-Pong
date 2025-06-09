@@ -15,7 +15,14 @@ run/main_scene="res://Main Menu.tscn"
 config/features=PackedStringArray("4.3", "C#")
 boot_splash/image="res://Loading Screen.png"
 config/icon="res://icon.png"
-config/windows_native_icon="res://favicon.ico"
+
+[autoload]
+
+HolePunch="*res://addons/Holepunch/holepunch_node.gd"
+
+[debug]
+
+file_logging/enable_file_logging=true
 
 [display]
 

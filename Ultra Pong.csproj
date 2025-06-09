@@ -9,7 +9,6 @@
     <Compile Remove="Server.cs" />
     <Compile Remove="Client.cs" />
     <Compile Remove="ClockSync.cs" />
-    <Compile Remove="Network.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.3.1" />

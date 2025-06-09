@@ -1,5 +1,6 @@
-[gd_scene load_steps=20 format=3 uid="uid://dfu6g7r6en4iw"]
+[gd_scene load_steps=21 format=3 uid="uid://dfu6g7r6en4iw"]
 
+[ext_resource type="Script" path="res://Network.cs" id="1_ii3ak"]
 [ext_resource type="PackedScene" uid="uid://cse05e4dbaikg" path="res://Ball.tscn" id="2_5om6r"]
 [ext_resource type="Script" path="res://Clock.cs" id="2_aa8at"]
 [ext_resource type="PackedScene" uid="uid://dy1xuua4jy3cn" path="res://Choose Team.tscn" id="3_4o1i5"]
@@ -82,6 +83,7 @@ properties/1/replication_mode = 2
 process_thread_group = 1
 process_thread_group_order = 0
 process_thread_messages = 0
+script = ExtResource("1_ii3ak")
 
 [node name="Clock" type="Node" parent="Network"]
 process_thread_group = 1

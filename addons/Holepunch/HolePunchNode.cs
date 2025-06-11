@@ -74,12 +74,12 @@ public partial class HolePunchNode : Node
         {
             byte[] arrayBytes = peerUdp.GetPacket();
             string packetString = Encoding.ASCII.GetString(arrayBytes);
-            GD.Print($"Received from peer: {packetString}");
             
             if (!receivedPeerGreet)
             {
                 if (packetString.StartsWith(PEER_GREET))
                 {
+                    GD.Print("Received peer greet");
                     string[] m = packetString.Split(':');
                     HandleGreetMessage(m[1], int.Parse(m[2]), int.Parse(m[3]));
                 }
@@ -89,6 +89,7 @@ public partial class HolePunchNode : Node
             {
                 if (packetString.StartsWith(PEER_CONFIRM))
                 {
+                    GD.Print("Received peer confirm");
                     string[] m = packetString.Split(':');
                     HandleConfirmMessage(m[2], m[1], m[4], m[3]);
                 }
@@ -161,8 +162,7 @@ public partial class HolePunchNode : Node
             if (err != Error.Ok)
             {
                 GD.PrintErr($"Failed to rebind peer UDP to port {ownPort}: {err}");
-                // Opcional: tentar uma porta próxima ou continuar sem rebind
-                return; // Não marcar como greet recebido se rebind falhou
+                return;
             }
             GD.Print($"Successfully rebound to port {ownPort}");
         }
@@ -248,6 +248,7 @@ public partial class HolePunchNode : Node
         {
             foreach (string p in peer.Keys)
             {
+                GD.Print("Sending confirm to peer");
                 peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
                 string message = $"confirm:{ownPort}:{clientName}:{isHost}:{peer[p]["port"]}";
                 byte[] buffer = Encoding.UTF8.GetBytes(message);

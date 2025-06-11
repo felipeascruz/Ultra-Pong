@@ -3,7 +3,7 @@ extends EditorPlugin
 
 func _enter_tree():
 	# Initialization of the plugin goes here
-	add_custom_type("HolePunch", "Node", preload("holepunch_node.gd"), preload("icon.png"))
+	add_custom_type("HolePunch", "Node", preload("HolePunchNode.cs"), preload("icon.png"))
 
 func _exit_tree():
 	# Clean-up of the plugin goes here

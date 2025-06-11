@@ -69,7 +69,7 @@ func _process(delta):
 				var m = packet_string.split(":")
 				_handle_confirm_message(m[2], m[1], m[4], m[3])
 
-		elif not received_peer_go:
+		if not received_peer_go:
 			if packet_string.begins_with(PEER_GO):
 				var m = packet_string.split(":")
 				_handle_go_message(m[1])
@@ -112,8 +112,6 @@ func _handle_confirm_message(peer_name, peer_port, my_port, is_host):
 	if is_host:
 		host_address = peer[peer_name].address
 		host_port = peer[peer_name].port
-	peer_udp.close()
-	peer_udp.bind(own_port, "*")
 	received_peer_confirm = true
 
 
@@ -181,7 +179,6 @@ func start_peer_contact():
 	if err != OK:
 		print("Error binding on: " + str(own_port) +" Error: " + str(err))
 	p_timer.start()
-	print("Started peer contact")
 
 
 #this function can be called to the server if you want to end the holepunch before the server closes the session
@@ -245,6 +242,12 @@ func _send_client_to_server():
 	server_udp.set_dest_address(rendezvous_address, rendezvous_port)
 	server_udp.put_packet(buffer)
 
+func cleanup_sockets():
+	print("Forcing socket cleanup...")
+	if peer_udp.is_bound():
+		peer_udp.close()
+	if server_udp.is_bound():
+		server_udp.close()
 
 func _exit_tree():
 	server_udp.close()

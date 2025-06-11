@@ -18,7 +18,7 @@ config/icon="res://icon.png"
 
 [autoload]
 
-HolePunch="*res://addons/Holepunch/holepunch_node.gd"
+HolePunch="*res://addons/Holepunch/HolePunchNode.cs"
 
 [debug]
 

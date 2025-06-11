@@ -89,6 +89,6 @@ icon_alignment = 1
 expand_icon = true
 script = ExtResource("3_l22av")
 
-[connection signal="pressed" from="Create" to="." method="CreateRoom"]
-[connection signal="pressed" from="Join" to="." method="JoinRoom"]
+[connection signal="pressed" from="Create" to="." method="SetupRoom" binds= [true]]
+[connection signal="pressed" from="Join" to="." method="SetupRoom" binds= [false]]
 [connection signal="pressed" from="Quit" to="Quit" method="OnPressed"]

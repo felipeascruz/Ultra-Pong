@@ -9,5 +9,7 @@ ssh ultra-pong-client "rm -r ultra-pong"
 ::Send new version to server
 scp -r "%GODOT_PATH%/exports/Ultra Pong Linux" ultra-pong-client:/home/Felipe-Cruz/ultra-pong
 
-::Clean, build and run docker with new game version
-ssh ultra-pong-client "sudo docker rm -f ultra-pong-client; sudo docker build -t ultra-pong-client .; sudo docker run -t -p 7000:7000 --name ultra-pong-client ultra-pong-client"
+::Clean and build docker
+ssh ultra-pong-client "sudo docker rm -f ultra-pong-client; sudo docker build -t ultra-pong-client .;"
+
+pause

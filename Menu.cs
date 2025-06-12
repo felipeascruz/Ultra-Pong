@@ -40,7 +40,7 @@ public partial class Menu : Control
 	}
 	
 	//Called through 'hole punched' signal
-	private void EnterGame(int myPort, int hostsPort, string hostsAddress)
+	private async void EnterGame(int myPort, int hostsPort, string hostsAddress)
 	{
 		GD.Print($"My port: {myPort}, hosts port: {hostsPort}, hosts address: {hostsAddress}");
 		
@@ -63,6 +63,9 @@ public partial class Menu : Control
 		GD.Print("Created multiplayer peer successfully");
 
 		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
+		
+		//Wait for multiplayer peer to be configured
+		await ToSignal(GetTree().CreateTimer(0.5F), "timeout");
 		
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}

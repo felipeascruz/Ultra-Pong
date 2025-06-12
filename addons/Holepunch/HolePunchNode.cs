@@ -21,7 +21,7 @@ public partial class HolePunchNode : Node
     // This is the range of ports you will search if you hear no response from the first port tried
     private int portCascadeRange = 10;
     // The amount of messages of the same type you will send before cascading or giving up
-    private int responseWindow = 5;
+    private int responseWindow = 10;
 
     private bool foundServer = false;
     private bool receivedPeerInfo = false;
@@ -75,11 +75,11 @@ public partial class HolePunchNode : Node
             byte[] arrayBytes = peerUdp.GetPacket();
             string packetString = Encoding.ASCII.GetString(arrayBytes);
             
+            GD.Print($"Received from peer: {packetString}");
             if (!receivedPeerGreet)
             {
                 if (packetString.StartsWith(PEER_GREET))
                 {
-                    GD.Print("Received peer greet");
                     string[] m = packetString.Split(':');
                     HandleGreetMessage(m[1], int.Parse(m[2]), int.Parse(m[3]));
                 }
@@ -147,11 +147,6 @@ public partial class HolePunchNode : Node
 
     private void HandleGreetMessage(string peerName, int peerPort, int myPort)
     {
-        GD.Print("Handling greet");
-        GD.Print("Peer Name: " + peerName);
-        GD.Print("Peer Port: " + peerPort);
-        GD.Print("My Port: " + myPort);
-        
         if (ownPort != myPort)
         {
             GD.Print($"Port mismatch: own={ownPort}, received={myPort}. Rebinding...");
@@ -171,11 +166,9 @@ public partial class HolePunchNode : Node
 
     private void HandleConfirmMessage(string peerName, string peerPortStr, string myPortStr, string isHostStr)
     {
-        GD.Print("Handling confirm message");
         int peerPort = int.Parse(peerPortStr);
         int myPort = int.Parse(myPortStr);
         bool peerIsHost = isHostStr.ToLower() == "true";
-        GD.Print($"Is host: {isHostStr} ({isHost})");
 
         if (peer.ContainsKey(peerName) && peer[peerName]["port"].AsInt32() != peerPort)
         {
@@ -248,8 +241,9 @@ public partial class HolePunchNode : Node
         {
             foreach (string p in peer.Keys)
             {
-                GD.Print("Sending confirm to peer");
-                peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
+                GD.Print("Sending confirm to peer on port " + peerUdp.GetPacketPort());
+                //peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
+                peerUdp.SetDestAddress(peer[p]["address"].AsString(), peerUdp.GetPacketPort());
                 string message = $"confirm:{ownPort}:{clientName}:{isHost}:{peer[p]["port"]}";
                 byte[] buffer = Encoding.UTF8.GetBytes(message);
                 peerUdp.PutPacket(buffer);
@@ -260,7 +254,9 @@ public partial class HolePunchNode : Node
         {
             foreach (string p in peer.Keys)
             {
-                peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
+                GD.Print("Sending go to peer on port " + peerUdp.GetPacketPort());
+                //peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
+                peerUdp.SetDestAddress(peer[p]["address"].AsString(), peerUdp.GetPacketPort());
                 string message = $"go:{clientName}";
                 byte[] buffer = Encoding.UTF8.GetBytes(message);
                 peerUdp.PutPacket(buffer);

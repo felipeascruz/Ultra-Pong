@@ -30,7 +30,6 @@ offset_bottom = 754.0
 focus_neighbor_top = NodePath("../Nickname")
 focus_neighbor_bottom = NodePath("../Create")
 placeholder_text = "Room"
-secret = true
 
 [node name="Create" type="Button" parent="."]
 layout_mode = 0

@@ -20,8 +20,8 @@ public partial class HolePunchNode : Node
     private int rendezvousPort = 1910;
     // This is the range of ports you will search if you hear no response from the first port tried
     private int portCascadeRange = 10;
-    // The amount of messages of the same type you will send before cascading or giving up
-    private int responseWindow = 10;
+    // The number of messages of the same type you will send before giving up
+    private int responseWindow = 20;
 
     private bool foundServer = false;
     private bool receivedPeerInfo = false;
@@ -38,8 +38,7 @@ public partial class HolePunchNode : Node
     private string clientName;
     private Timer pTimer;
     private string sessionId;
-
-    private int portsTried = 0;
+    
     private int greetsSent = 0;
     private int gosSent = 0;
 
@@ -64,7 +63,7 @@ public partial class HolePunchNode : Node
         pTimer = new Timer();
         GetNode("/root/").CallDeferred("add_child", pTimer);
         pTimer.Timeout += OnPingPeer;
-        pTimer.WaitTime = 0.1F;
+        pTimer.WaitTime = 0.4D;
     }
 
     public override void _Process(double delta)
@@ -199,14 +198,19 @@ public partial class HolePunchNode : Node
 
     private void CascadePeer(string address, int peerPort)
     {
-        for (int i = peerPort - portCascadeRange; i < peerPort + portCascadeRange; i++)
-        {
-            peerUdp.SetDestAddress(address, i);
-            string message = $"greet:{clientName}:{ownPort}:{i}";
-            byte[] buffer = Encoding.UTF8.GetBytes(message);
-            peerUdp.PutPacket(buffer);
-            portsTried += 1;
-        }
+        for (int i = peerPort - portCascadeRange; i <= peerPort + portCascadeRange; i++)
+            if (i is >= 1024 and <= 65535)
+            {
+                var err = peerUdp.SetDestAddress(address, i);
+                if (err != Error.Ok) 
+                    GD.PrintErr("Error setting peer UDP destination address: " + err);
+                
+                string message = $"greet:{clientName}:{ownPort}:{i}";
+                byte[] buffer = Encoding.UTF8.GetBytes(message);
+                err = peerUdp.PutPacket(buffer);
+                if (err != Error.Ok) 
+                    GD.PrintErr("Error putting packet: " + err);
+            }
     }
 
     private void OnPingPeer()
@@ -215,26 +219,9 @@ public partial class HolePunchNode : Node
         {
             foreach (string p in peer.Keys)
             {
-                peerUdp.SetDestAddress(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
-                string message = $"greet:{clientName}:{ownPort}:{peer[p]["port"]}";
-                byte[] buffer = Encoding.UTF8.GetBytes(message);
-                peerUdp.PutPacket(buffer);
+                CascadePeer(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());;
                 greetsSent++;
-                if (greetsSent == responseWindow)
-                {
-                    GD.Print("Receiving no confirm. Starting port cascade");
-                    // if the other player hasn't responded, we should try more ports
-                }
             }
-        }
-
-        if (!receivedPeerConfirm && greetsSent == responseWindow)
-        {
-            foreach (string p in peer.Keys)
-            {
-                CascadePeer(peer[p]["address"].AsString(), peer[p]["port"].AsInt32());
-            }
-            greetsSent += 1;
         }
 
         if (receivedPeerGreet && !receivedPeerGo)
@@ -273,7 +260,7 @@ public partial class HolePunchNode : Node
         }
     }
 
-    private void StartPeerContact()
+    private async void StartPeerContact()
     {
         byte[] goodbyeBuffer = Encoding.UTF8.GetBytes("goodbye");
         var err = serverUdp.PutPacket(goodbyeBuffer);
@@ -284,11 +271,18 @@ public partial class HolePunchNode : Node
             peerUdp.Close();
         }
         
-        err = peerUdp.Bind(ownPort, "*");
+        err = peerUdp.Bind(0);
         if (err != Error.Ok)
         {
-            GD.Print($"Error binding on: {ownPort} Error: {err}");
+            err = peerUdp.Bind(ownPort);
+            if (err != Error.Ok)
+            {
+                GD.Print($"Error binding on: {ownPort}: " + err);
+                return;
+            }
         }
+
+        await ToSignal(GetTree().CreateTimer(2D), SceneTreeTimer.SignalName.Timeout);
         pTimer.Start();
     }
 
@@ -336,15 +330,12 @@ public partial class HolePunchNode : Node
         receivedPeerConfirm = false;
         receivedPeerGo = false;
         peer.Clear();
-
-        portsTried = 0;
+        
         greetsSent = 0;
         gosSent = 0;
         
         if (string.IsNullOrEmpty(id))
-        {
             id = "1";
-        }
         sessionId = id;
 
         if (isHost)

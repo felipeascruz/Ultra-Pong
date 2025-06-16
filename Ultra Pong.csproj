@@ -20,5 +20,6 @@
     <Content Include="ballStats.json" />
     <Content Include="playerStats.json" />
     <Content Include="userStats.json" />
+    <Content Include=".gitignore" />
   </ItemGroup>
 </Project>

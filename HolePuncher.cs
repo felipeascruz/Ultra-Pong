@@ -9,42 +9,75 @@ namespace UltraPong;
 
 public partial class HolePuncher : Node
 {
+    [Signal]
+    public delegate void HolePunchedEventHandler(int myPort, int hostsPort, string hostsAddress);
+    
+    [Signal]
+    public delegate void SessionRegisteredEventHandler();
+    
     private const string SERVER_IP = "20.206.244.22";
     private const int SERVER_PORT = 1910;
+
+    public bool IsHost { get; private set; }
 
     private static readonly StreamPeerTcp ServerTcp = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     
     private int _ownPort;
     
-    private const int MAX_PEERS = 4;
-    private readonly Dictionary<byte[], Peer> _peers = new(MAX_PEERS);
+    private Dictionary<byte[], Peer>? _peers;
 
     private MessageTypes _punchStep;
 
     private Timer _pingPeerTimer = new();
 
+    private byte _messagesSentRange;
+
     private byte _messagesSent;
 
     public override void _Ready()
     {
-        SetProcess(false);
-        
-        _pingPeerTimer.WaitTime = 0.01D;
+        _pingPeerTimer.WaitTime = 0.1d;
         _pingPeerTimer.Connect("timeout", new Callable(this, nameof(PingPeer)));
-        _pingPeerTimer.SetName("Ping Peer Timer");
         
-        AddChild(_pingPeerTimer, true);
+        AddChild(_pingPeerTimer);
+    }
+    
+    public void ConnectToServer(bool isHost, string? room, string? nickname, byte maxPeers = 4)
+    {
+        IsHost = isHost;
+        _peers = new Dictionary<byte[], Peer>(maxPeers);
+        
+        var error = ServerTcp.ConnectToHost(SERVER_IP, SERVER_PORT);
+        if (error != Error.Ok)
+        {
+            GD.PrintErr("Error connecting to server: " + error);
+            return;
+        }
+        
+        var roomClientBytes = Encoding.ASCII.GetBytes($"{room}:{nickname}");
+        
+        var data = new byte[1 + roomClientBytes.Length];
+        //Store isHost on MSB of the first byte and the Message Type on the other 7 bits
+        data[0] = (byte)((isHost ? 0x80 : 0x00) | (byte)MessageTypes.SendRegister);
+        //Store roomClient string after the first byte
+        Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
+        
+        error = ServerTcp.PutData(data);
+        
+        if (error != Error.Ok)
+            GD.PrintErr("Error sending server TCP packet: " + error);
     }
     
     //Process is only used for listening
     public override void _Process(double delta)
     {
+        ServerTcp.Poll();
         
         //HandleServerMessages
         if (ServerTcp.GetStatus() is StreamPeerTcp.Status.Connected && ServerTcp.GetAvailableBytes() > 0)
         {
-            //Method GetData returns a Godot.Array with the error code and the data
+            //Method GetData returns a Godot.Array with an error code and the data
             var dataArray = ServerTcp.GetData(ServerTcp.GetAvailableBytes());
 
             var error = dataArray[0].As<Error>();
@@ -64,12 +97,12 @@ public partial class HolePuncher : Node
             }
             else if (dataType is MessageTypes.ReceivePeerInfo)
             {
-                byte[] publicIp = new ArraySegment<byte>(data, 1, 4).ToArray();
-                byte[] privateIp = new ArraySegment<byte>(data, 5, 4).ToArray();
-                int port = ToInt32(data, 9);
+                var publicIp = new ArraySegment<byte>(data, 1, 4).ToArray();
+                var privateIp = new ArraySegment<byte>(data, 5, 4).ToArray();
+                var port = ToInt32(data, 9);
 
-                _peers.Add(publicIp, new Peer(port, privateIp));
-                PeerUdp.SetDestAddress(BytesToIp(publicIp), port);
+                _peers?.Add(publicIp, new Peer(port, privateIp));
+                PeerUdp.SetDestAddress(BytesToIpv4(publicIp), port);
                 _pingPeerTimer.Start();
             }
             else
@@ -90,61 +123,64 @@ public partial class HolePuncher : Node
             if (dataType is MessageTypes.Greet or MessageTypes.Confirm)
             {
                 _ownPort = ToInt32(data, 1);
-                _peers[IpToBytes(PeerUdp.GetPacketIP())].Port = PeerUdp.GetPacketPort();
+                if (_peers != null) _peers[Ipv4ToBytes(PeerUdp.GetPacketIP())].Port = PeerUdp.GetPacketPort();
                 _punchStep = dataType + 1;
-                
-                error = PeerUdp.Bind(_ownPort);
-                if (error != Error.Ok)
-                    GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+
+                if (!IsHost)
+                {
+                    error = PeerUdp.Bind(_ownPort);
+                    if (error != Error.Ok)
+                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+                }
 
                 _messagesSent = 0;
             }
             else if (dataType is MessageTypes.Go)
-                PeerUdp.Close();
+                HandleGoMessage();
             else
                 GD.PrintErr("Unknown peer message type: " + dataType);
         }
     }
-
-    //Signaled through Ping Peer Timer
+    
+    // Signaled through Ping Peer Timer
     private void PingPeer()
     {
         var data = new byte[5];
         data[0] = (byte)_punchStep;
-        Array.Copy(GetBytes(PeerUdp.GetPacketPort()),0,data, 1, 4);
         
-        var error = PeerUdp.PutPacket(data);
-        if (error != Error.Ok)
-            GD.PrintErr("Error sending peer UDP packet: " + error);
+        // Only the host should cascade the ports because all the players are connecting to it
+        var portCascadeRange = IsHost ? 10 : 0;
+        var targetPort = PeerUdp.GetPacketPort();
+        for (var port = targetPort - portCascadeRange; port <= targetPort + portCascadeRange; port++)
+        {
+            PeerUdp.SetDestAddress(PeerUdp.GetPacketIP(), port);
+            Array.Copy(GetBytes(port), 0, data, 1, 4);
 
-        _messagesSent++;
+            var error = PeerUdp.PutPacket(data);
+            if (error != Error.Ok)
+                GD.PrintErr("Error sending peer UDP packet: " + error);
+        }
+        
+        if (_messagesSent++ >= _messagesSentRange)
+        {
+            _pingPeerTimer.Stop();
+            GD.Print("Not received response from peer. Stopping hole punch.");
+        }
     }
 
-    public void ConnectToServer(bool isHost, string? room, string? nickname)
+    private void HandleGoMessage()
     {
-        var error = ServerTcp.ConnectToHost(SERVER_IP, SERVER_PORT);
-        ServerTcp.SetNoDelay(true);
-        if (error != Error.Ok)
-        {
-            GD.PrintErr("Error connecting to server: " + error);
-            return;
-        }
-
-        var roomClient = $"{room}:{nickname}";
-        var roomClientBytes = Encoding.ASCII.GetBytes(roomClient);
+        _punchStep = MessageTypes.Go;
         
-        var data = new byte[1 + roomClientBytes.Length];
-        //Store isHost on LSB of the first byte and the Message Type on the other 7 bits
-        data[0] = (byte)((byte)MessageTypes.SendRegister << 1 | (isHost ? 1 : 0));
-        //Store roomClient string after the first byte
-        Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
-        
-        error = ServerTcp.PutData(data);
-        
+        var data = new[] { (byte)MessageTypes.SendHolePunched };
+        var error = ServerTcp.PutData(data);
         if (error != Error.Ok)
             GD.PrintErr("Error sending server TCP packet: " + error);
-        else
-            SetProcess(true);
+        
+        PeerUdp.Close();
+        _pingPeerTimer.Stop();
+
+        _punchStep = 0;
     }
     
     private enum MessageTypes : byte
@@ -170,7 +206,7 @@ public partial class HolePuncher : Node
         }
     }
 
-    private static byte[] IpToBytes(string ip)
+    private static byte[] Ipv4ToBytes(string ip)
     {
         var ipArray = ip.Split('.');
         var ipBytes = new byte[4];
@@ -179,7 +215,7 @@ public partial class HolePuncher : Node
         return ipBytes;
     }
 
-    private static string BytesToIp(byte[] ip)
+    private static string BytesToIpv4(byte[] ip)
     {
         return $"{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}";
     }

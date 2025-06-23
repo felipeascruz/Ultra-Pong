@@ -6,7 +6,7 @@ public partial class Menu : Control
 {
 	private static readonly UserStats UserStats = JsonFileAccess.Read<UserStats>("user://userStats.json");
 	private string Room => GetNode<LineEdit>("Room").Text;
-	private HolePunchNode HolePuncher => GetNode<HolePunchNode>("/root/HolePunch");
+	private HolePuncher HolePuncher => GetNode<HolePuncher>("/root/HolePuncher");
 
 	public override void _Ready()
 	{
@@ -34,22 +34,21 @@ public partial class Menu : Control
 		JsonFileAccess.Write("user://userStats.json", UserStats);
 
 		var nickname = UserStats.Nickname == "" ? "Player" : UserStats.Nickname;
-		HolePuncher.StartTraversal(Room, isHost, nickname, 2);
+		HolePuncher.ConnectToServer(isHost, Room, nickname);
 		
-		HolePuncher.Connect(HolePunchNode.SignalName.HolePunched, new Callable(this, nameof(EnterGame)));
+		HolePuncher.Connect(HolePuncher.SignalName.SessionRegistered, new Callable(this, nameof(EnterGame)));
+		HolePuncher.Connect(HolePuncher.SignalName.HolePunched, new Callable(this, nameof(EnterGame)));
 	}
 	
 	//Called through 'hole punched' signal
-	private async void EnterGame(int myPort, int hostsPort, string hostsAddress)
+	private void EnterGame(int myPort, int hostsPort, string hostsAddress)
 	{
 		GD.Print($"My port: {myPort}, hosts port: {hostsPort}, hosts address: {hostsAddress}");
-		
-		HolePuncher.CleanupSockets();
 		
 		var peer = new ENetMultiplayerPeer();
 
 		Error err;
-		if (HolePuncher.isHost)
+		if (HolePuncher.IsHost)
 			err = peer.CreateServer(myPort, 4);
 		else
 			err = peer.CreateClient(hostsAddress, hostsPort, localPort: myPort);
@@ -64,9 +63,14 @@ public partial class Menu : Control
 
 		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
 		
-		//Wait for multiplayer peer to be configured
-		await ToSignal(GetTree().CreateTimer(0.5F), "timeout");
-		
 		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+	
+	public override void _ExitTree()
+	{
+		HolePuncher.Disconnect(HolePuncher.SignalName.SessionRegistered, 
+			new Callable(this, nameof(EnterGame)));
+		HolePuncher.Disconnect(HolePuncher.SignalName.HolePunched, 
+			new Callable(this, nameof(EnterGame)));
 	}
 }

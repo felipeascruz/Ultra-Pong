@@ -24,6 +24,9 @@ public partial class Player : CharacterBody2D
 	public bool IsLocalPlayer => Multiplayer.GetUniqueId() == Id;
 
 	private sbyte _rotationDirection = -1;
+	private float _currentRotation;
+	private float _targetRotation;
+
 	public Vector2 Direction { get; set; } = Vector2.Zero;
 	public bool Boosting { get; set; }
 	public float RotateTo { get; set; }
@@ -45,6 +48,8 @@ public partial class Player : CharacterBody2D
 
 		GetNode<Label>("Nickname").TopLevel = true;
 		
+		_currentRotation = Rotation;
+		
 		SetProcessUnhandledInput(IsLocalPlayer);
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
 		
@@ -53,16 +58,16 @@ public partial class Player : CharacterBody2D
 			MouseMode = MouseModeEnum.Captured;
 
 		var indicatorModel = new Sprite2D
-			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01F, 0.01F) };
+			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01f, 0.01f) };
 		if (Device.Type == 'K')
 		{
 			var rotationIndicator = new Node2D{Name = "Rotation Indicator"};
 			
-			indicatorModel.Position = new Vector2(0F, -Stats.Size.Y/2.5F);
+			indicatorModel.Position = new Vector2(0f, -Stats.Size.Y/2.5f);
 			indicatorModel.Name = "Up";
 			rotationIndicator.AddChild(indicatorModel, true);
 
-			var downIndicator = new Sprite2D{Name = "Down", Position = new Vector2(0F, Stats.Size.Y/2.5F),
+			var downIndicator = new Sprite2D{Name = "Down", Position = new Vector2(0f, Stats.Size.Y/2.5f),
 				Texture = indicatorModel.Texture, Modulate  = indicatorModel.Modulate, Scale = indicatorModel.Scale};
 			rotationIndicator.AddChild(downIndicator, true);
 			
@@ -83,7 +88,7 @@ public partial class Player : CharacterBody2D
 		//Check Overtime
 		if (Overtime > 0)
 		{
-			Scale -= new Vector2(0F, 0.05F * (float)delta);
+			Scale -= new Vector2(0f, 0.05f * (float)delta);
 			Overtime -= delta;
 			SetPhysicsProcess(false);
 		}
@@ -95,10 +100,10 @@ public partial class Player : CharacterBody2D
 			return;
 		if (Device.Type == 'K')
 		{
-			var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation / 2F)) };
+			var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation / 2f)) };
 			GetNode<Sprite2D>("Rotation Indicator/Down").Modulate = color;
 
-			color.A = Mathf.Abs(Mathf.Sin(Rotation / 2F));
+			color.A = Mathf.Abs(Mathf.Sin(Rotation / 2f));
 			GetNode<Sprite2D>("Rotation Indicator/Up").Modulate = color;
 			return;
 		}
@@ -106,37 +111,37 @@ public partial class Player : CharacterBody2D
 		GetNode<Sprite2D>("Rotation Indicator").GlobalPosition =
 			Position + 
 			GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device) * 
-			Stats.Size.Y/2.5F;
+			Stats.Size.Y/2.5f;
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
-		//Check boost
-		var rectangle = GetNode<ColorRect>("Rectangle");
 		float speed;
-		if (Boosting)
+		//Check boost
 		{
-			rectangle.Color = Colors.Yellow;
-			speed = Stats.Speed * 3;
-			SetCollisionLayerValue(1, false);
-			SetCollisionMaskValue(1, false);
-			SetCollisionMaskValue(2, false);
+			var rectangle = GetNode<ColorRect>("Rectangle");
+			if (Boosting)
+			{
+				rectangle.Color = Colors.Yellow;
+				speed = Stats.Speed * 3;
+				SetCollisionLayerValue(1, false);
+				SetCollisionMaskValue(1, false);
+				SetCollisionMaskValue(2, false);
+			}
+			else
+			{
+				rectangle.Color = InitialColor;
+				speed = Stats.Speed;
+				SetCollisionLayerValue(1, true);
+				SetCollisionMaskValue(1, true);
+				SetCollisionMaskValue(2, true);
+			}
 		}
-		else
-		{
-			rectangle.Color = InitialColor;
-			speed = Stats.Speed;
-			SetCollisionLayerValue(1, true);
-			SetCollisionMaskValue(1, true);
-			SetCollisionMaskValue(2, true);
-		}
-		
+
 		Velocity = Direction * speed;
 		MoveAndSlide();
 		
-		var maxRotation = Stats.MaxRotation * (float)delta;
-		Rotate(Device.Type == 'K' ? Mathf.Clamp(RotateTo, -maxRotation, maxRotation) : RotateTo);
-		RotateTo = 0F;
+		HandleRotation(delta);
 
 		//Apply impulse to Ball
 		for (sbyte i = 0; i < GetSlideCollisionCount(); i++)
@@ -145,10 +150,10 @@ public partial class Player : CharacterBody2D
 			if (c.GetCollider() is not Ball ball) continue;
 
 			var sfx = ball.GetNode<AudioStreamPlayer2D>("SoundFX");
-			sfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
+			sfx.PitchScale = 0.5f + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
 			sfx.Play();
 				
-			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80F, c.GetPosition() - ball.GlobalPosition);
+			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80f, c.GetPosition() - ball.GlobalPosition);
 
 			if (!Multiplayer.IsServer()) 
 				continue;
@@ -158,13 +163,13 @@ public partial class Player : CharacterBody2D
 			var timeDisplay = GetNode<Label>("../../Time Display");
 			switch (timeDisplay.Position.X)
 			{
-				case < 1F when Position.X > 960F:
-					timeDisplay.Position = new Vector2(960F, timeDisplay.Position.Y);
+				case < 1f when Position.X > 960f:
+					timeDisplay.Position = new Vector2(960f, timeDisplay.Position.Y);
 					possessionTimer.Stop();
 					possessionTimer.Start();
 					break;
-				case > 959F when Position.X < 960F:
-					timeDisplay.Position = new Vector2(0F, timeDisplay.Position.Y);
+				case > 959f when Position.X < 960f:
+					timeDisplay.Position = new Vector2(0f, timeDisplay.Position.Y);
 					possessionTimer.Stop();
 					possessionTimer.Start();
 					break;
@@ -172,6 +177,50 @@ public partial class Player : CharacterBody2D
 			break;
 		}
 	}
+	
+	private void HandleRotation(double delta)
+	{
+		var maxRotationThisFrame = Stats.MaxRotation * (float)delta;
+        
+		if (Device.Type == 'K')
+		{
+			var clampedRotation = Mathf.Clamp(RotateTo, -maxRotationThisFrame, maxRotationThisFrame);
+			var newRotation = _currentRotation + clampedRotation;
+			
+			newRotation = Mathf.Clamp(newRotation, -Stats.MaxRotation, Stats.MaxRotation);
+            
+			var rotationDelta = newRotation - _currentRotation;
+			Rotate(rotationDelta);
+			_currentRotation = newRotation;
+		}
+		else
+		{
+			if (RotateTo != 0f)
+				_targetRotation = Mathf.Clamp(RotateTo, -Stats.MaxRotation, Stats.MaxRotation);
+			
+			var rotationDiff = Mathf.AngleDifference(_currentRotation, _targetRotation);
+			var maxChange = maxRotationThisFrame;
+			var change = Mathf.Clamp(rotationDiff, -maxChange, maxChange);
+            
+			Rotate(change);
+			_currentRotation += change;
+		}
+        
+		// Normalizar a rotação atual para evitar valores muito grandes
+		_currentRotation = NormalizeAngle(_currentRotation);
+		RotateTo = 0f;
+	}
+
+	private float NormalizeAngle(float angle)
+	{
+		while (angle > Mathf.Pi)
+			angle -= 2 * Mathf.Pi;
+		while (angle < -Mathf.Pi)
+			angle += 2 * Mathf.Pi;
+		return angle;
+	}
+
+	
 	
 	public override void _UnhandledInput(InputEvent @event)
 	{
@@ -184,11 +233,11 @@ public partial class Player : CharacterBody2D
 		if (@event.IsActionPressed("Change Rotation"))
 		{
 			_rotationDirection *= -1;
-			GetNode<Node2D>("Rotation Indicator").RotationDegrees += 180F;
+			GetNode<Node2D>("Rotation Indicator").RotationDegrees += 180f;
 			return;
 		}
 
-		var rotation = 0F;
+		var rotation = 0f;
 		switch (@event)
 		{
 			case InputEventMouseMotion mouseMotion when Device.Type == 'K':
@@ -198,15 +247,15 @@ public partial class Player : CharacterBody2D
 			case InputEventJoypadMotion when Device.Type == 'C':
 			{
 				var to = GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device);
-				if (to.Length() >= 1F)
+				if (to.Length() >= 1f)
 				{
-					rotation = Rotation;
-					Rotation = Mathf.Pi / 2 + to.Angle();
-					rotation = Rotation - rotation;
+					var targetAngle = Mathf.Pi / 2 + to.Angle();
+					RotateTo = targetAngle;
 				}
 				break;
 			}
 		}
+
 		
 		if (!Multiplayer.IsServer())
 			GetNode<PlayersHandler>("../../../Network/PlayersHandler").FetchInputWrapper

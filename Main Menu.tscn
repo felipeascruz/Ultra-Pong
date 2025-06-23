@@ -3,7 +3,8 @@
 [ext_resource type="Script" path="res://Menu.cs" id="1"]
 [ext_resource type="Texture2D" uid="uid://disbt3swx42n5" path="res://Leave.png" id="2_etv2e"]
 [ext_resource type="Script" path="res://Quit.cs" id="3_l22av"]
-[ext_resource type="Script" path="res://addons/Holepunch/holepunch_node.gd" id="4_nvod0"]
+
+[sub_resource type="GDScript" id="GDScript_xupb3"]
 
 [node name="Menu" type="Control"]
 layout_mode = 3
@@ -31,7 +32,6 @@ offset_bottom = 754.0
 focus_neighbor_top = NodePath("../Nickname")
 focus_neighbor_bottom = NodePath("../Create")
 placeholder_text = "Room"
-secret = true
 
 [node name="Create" type="Button" parent="."]
 layout_mode = 0
@@ -91,9 +91,7 @@ expand_icon = true
 script = ExtResource("3_l22av")
 
 [node name="HolePunch" type="Node" parent="."]
-script = ExtResource("4_nvod0")
-rendezvous_address = "104.41.46.74"
-rendezvous_port = 1910
+script = SubResource("GDScript_xupb3")
 
 [connection signal="pressed" from="Create" to="." method="CreateRoom"]
 [connection signal="pressed" from="Join" to="." method="JoinRoom"]

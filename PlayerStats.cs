@@ -12,9 +12,9 @@ public class PlayerStats
 {
     public Vector2 Size { get; init; } = new(30F, 150F);
     public float Speed { get; init; } = 430F;
-    public float MaxRotation { get; init; } = 30F;
+    public float MaxRotation { get; init; } = 24F;
     public Vector2[] SpawnPoints { get; init; } = {new (320F, 360F), new(320F, 720F), new(1600F, 360F), new(1600F, 720F) };
-    public Color[] ColorsArray { get; set; } =  {Red, Tomato, Blue, Aqua};
+    public Color[] ColorsArray { get; init; } =  {Red, Tomato, Blue, Aqua};
 }
 
 public class PlayerStatsJsonConverter : JsonConverter<PlayerStats>

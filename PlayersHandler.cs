@@ -2,9 +2,8 @@ namespace UltraPong;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Godot;
 
 public partial class PlayersHandler : Node
@@ -14,7 +13,7 @@ public partial class PlayersHandler : Node
 	
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
 	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = new();
-	private const byte InterpolationMs = 30;
+	private const byte INTERPOLATION_MS = 30;
 	private Node Players => GetNode("../../World/Players");
 
 	public void FetchInputWrapper(string name, State state , Vector2 direction, bool boosting, float rotation)
@@ -42,7 +41,6 @@ public partial class PlayersHandler : Node
 
 		player.RotateTo = rotation;
 		//player.Rotate(player.Device.Type == 'K' ? Mathf.Clamp(rotation, -_maxRotation, _maxRotation) : rotation);
-
 	}
 	
 	public override void _PhysicsProcess(double delta)
@@ -54,14 +52,14 @@ public partial class PlayersHandler : Node
 
 		if (serverStates.Count == 0) return;
 		
-		var states = JsonSerializer.Serialize(serverStates);
+		var states = SerializeToBinary(serverStates);
 		Rpc(nameof(ReturnPlayersStates),Time.GetTicksUsec(), states);
 	}
 	
 	[Rpc(TransferChannel = 1)]
-	private void ReturnPlayersStates(ulong timestamp, string playersStates)
+	private void ReturnPlayersStates(ulong timestamp, byte[] playersStates)
 	{
-		var states = JsonSerializer.Deserialize<Dictionary<string, State>>(playersStates);
+		var states = DeserializeFromBinary(playersStates);
 		foreach (Player player in GetNode("../../World/Players").GetChildren())
 			if (player.IsLocalPlayer && states.ContainsKey(player.Name))
 			{
@@ -72,6 +70,49 @@ public partial class PlayersHandler : Node
 
 		if (states.Count > 0)
 			StatesBuffer.Add(new KeyValuePair<ulong, Dictionary<string, State>>(timestamp, states));
+	}
+	
+	private static byte[] SerializeToBinary(Dictionary<string, State> states)
+	{
+		using var stream = new MemoryStream();
+		using var writer = new BinaryWriter(stream);
+		
+		writer.Write(states.Count);
+		
+		foreach (var kvp in states)
+		{
+			writer.Write(kvp.Key);
+			writer.Write(kvp.Value.Position.X);
+			writer.Write(kvp.Value.Position.Y);
+			writer.Write(kvp.Value.Rotation);
+			writer.Write(kvp.Value.InputStamp);
+			writer.Write(kvp.Value.Boosting);
+		}
+		
+		return stream.ToArray();
+	}
+	
+	private static Dictionary<string, State> DeserializeFromBinary(byte[] data)
+	{
+		using var stream = new MemoryStream(data);
+		using var reader = new BinaryReader(stream);
+		
+		var count = reader.ReadInt32();
+		var states = new Dictionary<string, State>();
+		
+		for (int i = 0; i < count; i++)
+		{
+			var name = reader.ReadString();
+			var posX = reader.ReadSingle();
+			var posY = reader.ReadSingle();
+			var rotation = reader.ReadSingle();
+			var inputStamp = reader.ReadUInt32();
+			var boosting = reader.ReadBoolean();
+			
+			states[name] = new State(new Vector2(posX, posY), rotation, inputStamp, boosting);
+		}
+		
+		return states;
 	}
 	
 	private void RenderLocalStates(string name, uint inputStamp, Vector2 position, float rotation)
@@ -87,9 +128,9 @@ public partial class PlayersHandler : Node
 			else
 				UpdateState(position, rotation);
 		}
-		catch (Exception)
+		catch (Exception e)
 		{
-			//ignored
+			GD.PrintErr("Error while updating state: " + e.Message);
 		}
 
 		return;
@@ -110,7 +151,7 @@ public partial class PlayersHandler : Node
 		
 		StatesBuffer = StatesBuffer.OrderBy(state => state.Key).ToList();
 		
-		var renderTime = GetNode<Clock>("../../Network/Clock").ClientClock - InterpolationMs * 1000;
+		var renderTime = GetNode<Clock>("../../Network/Clock").ClientClock - INTERPOLATION_MS * 1000;
 		while (StatesBuffer.Count > 2 && renderTime > StatesBuffer[1].Key)
 			StatesBuffer.RemoveAt(0);
 
@@ -131,15 +172,12 @@ public partial class PlayersHandler : Node
 		}
 	}
 	
-	[JsonConverter(typeof(StateConverter))]
 	public class State
 	{
-		public Vector2 Position;
-		public float Rotation;
-		public uint InputStamp;
-		public bool Boosting;
-
-		public State() { }
+		public readonly Vector2 Position;
+		public readonly float Rotation;
+		public readonly uint InputStamp;
+		public readonly bool Boosting;
 		
 		public State(Vector2 position, float rotation, uint inputStamp = 0, bool boosting = false)
 		{
@@ -147,42 +185,6 @@ public partial class PlayersHandler : Node
 			Rotation = rotation;
 			InputStamp = inputStamp;
 			Boosting = boosting;
-		}
-	}
-	
-	public class StateConverter : JsonConverter<State>
-	{
-		public override State Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-		{
-			using var doc = JsonDocument.ParseValue(ref reader);
-			var root = doc.RootElement;
-
-			var position = root.GetProperty("Position");
-			return new State
-			{
-				Position = new Vector2(position.GetProperty("X").GetSingle(), position.GetProperty("Y").GetSingle()),
-				Rotation = root.GetProperty("Rotation").GetSingle(),
-				InputStamp = root.GetProperty("InputStamp").GetUInt32(),
-				Boosting = root.GetProperty("Boosting").GetBoolean()
-			};
-		}
-
-		public override void Write(Utf8JsonWriter writer, State value, JsonSerializerOptions options)
-		{
-			writer.WriteStartObject();
-			
-			writer.WriteStartObject("Position");
-			writer.WriteNumber("X", value.Position.X);
-			writer.WriteNumber("Y", value.Position.Y);
-			writer.WriteEndObject();
-
-			writer.WriteNumber("Rotation", value.Rotation);
-			
-			writer.WriteNumber("InputStamp", value.InputStamp);
-			
-			writer.WriteBoolean("Boosting", value.Boosting);
-
-			writer.WriteEndObject();
 		}
 	}
 }

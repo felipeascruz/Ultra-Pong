@@ -41,7 +41,8 @@ public partial class Ball : RigidBody2D
 		//Set state to server's state
 		if (Multiplayer.IsServer())
 		{
-			GetNode<BallHandler>("../../Network/BallHandler").ReturnBallStateWrapper(new BallHandler.State(Position, Rotation, LinearVelocity, AngularVelocity));
+			GetNode<BallHandler>("../../Network/BallHandler").
+				ReturnBallStateWrapper(new BallHandler.State(Position, Rotation, LinearVelocity, AngularVelocity));
 			return;
 		}
 		
@@ -58,6 +59,7 @@ public partial class Ball : RigidBody2D
 		_reset = true;
 	}
 
+	//Signaled through collision
 	private void OnCollided(Node body)
 	{
 		if (body is Player)

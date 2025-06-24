@@ -16,61 +16,66 @@ public partial class Menu : Control
 		nicknameNode.Text = UserStats.Nickname;
 		nicknameNode.GrabFocus();
 		nicknameNode.CaretColumn = nicknameNode.Text.Length;
+		
+		HolePuncher.Connect(HolePuncher.SignalName.ENetPortDiscovered, 
+			new Callable(this, nameof(OnENetPortDiscovered)));
+		HolePuncher.Connect(HolePuncher.SignalName.HostPortReceived, 
+			new Callable(this, nameof(OnHostPortReceived)));
 
 		if (OS.HasFeature("dedicated_server"))
-		{ 
-			UserStats.Nickname = "Host";
 			SetupRoom(true);
-			GD.Print("Running as dedicated server");
-		}
 	}
 
-	//Called thorugh button signals
 	private void SetupRoom(bool isHost)
 	{
 		UserStats.Nickname = GetNode<LineEdit>("Nickname").Text;
 		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value;
 		
 		JsonFileAccess.Write("user://userStats.json", UserStats);
-
-		var nickname = UserStats.Nickname == "" ? "Player" : UserStats.Nickname;
-		HolePuncher.ConnectToServer(isHost, Room, nickname);
 		
-		HolePuncher.Connect(HolePuncher.SignalName.SessionRegistered, new Callable(this, nameof(EnterGame)));
-		HolePuncher.Connect(HolePuncher.SignalName.HolePunched, new Callable(this, nameof(EnterGame)));
+		HolePuncher.ConnectToServer(isHost, Room, UserStats.Nickname);
 	}
 	
-	//Called through 'hole punched' signal
-	private void EnterGame(int myPort, int hostsPort, string hostsAddress)
+	private void OnHostPortReceived(int enetPort)
 	{
-		GD.Print($"My port: {myPort}, hosts port: {hostsPort}, hosts address: {hostsAddress}");
-		
+		GD.Print($"Host received ENet port from server: {enetPort}");
 		var peer = new ENetMultiplayerPeer();
-
-		Error err;
-		if (HolePuncher.IsHost)
-			err = peer.CreateServer(myPort, 4);
-		else
-			err = peer.CreateClient(hostsAddress, hostsPort, localPort: myPort);
-
+		
+		var err = peer.CreateServer(enetPort, 4);
 		if (err != Error.Ok)
 		{
-			GD.PrintErr("Error creating multiplayer peer: " + err);
+			GD.PrintErr($"Error creating ENet host: " + err);
 			return;
 		}
 		
-		GD.Print("Created multiplayer peer successfully");
-
-		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
+		GD.Print($"ENet server created successfully");
 		
+		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 	
+	// Signaled through Hole Puncher node
+	private void OnENetPortDiscovered(int enetPort, string hostAddress)
+	{
+		GD.Print($"Discovered host ENet port: {enetPort} at {hostAddress}");
+		var peer = new ENetMultiplayerPeer();
+		
+		var err = peer.CreateClient(hostAddress, enetPort);
+		if (err != Error.Ok)
+		{
+			GD.PrintErr($"Error connecting to ENet server {hostAddress}:{enetPort} - " + err);
+			return;
+		}
+		
+		GD.Print($"Connected to ENet server at {hostAddress}:{enetPort}");
+		
+		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
+		GetTree().ChangeSceneToFile("res://Main.tscn");
+	}
+
 	public override void _ExitTree()
 	{
-		HolePuncher.Disconnect(HolePuncher.SignalName.SessionRegistered, 
-			new Callable(this, nameof(EnterGame)));
-		HolePuncher.Disconnect(HolePuncher.SignalName.HolePunched, 
-			new Callable(this, nameof(EnterGame)));
+		HolePuncher.Disconnect(HolePuncher.SignalName.ENetPortDiscovered, new Callable(this, nameof(OnENetPortDiscovered)));
+		HolePuncher.Disconnect(HolePuncher.SignalName.HostPortReceived, new Callable(this, nameof(OnHostPortReceived)));
 	}
 }

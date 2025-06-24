@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
 using System.Text;
 using static System.BitConverter;
 using Godot;
@@ -10,7 +9,13 @@ namespace UltraPong;
 public partial class HolePuncher : Node
 {
     [Signal]
-    public delegate void HolePunchedEventHandler(int myPort, int hostsPort, string hostsAddress);
+    public delegate void HolePunchedEventHandler(int myPort);
+    
+    [Signal]
+    public delegate void ENetPortDiscoveredEventHandler(int enetPort, string hostsAddress);
+    
+    [Signal]
+    public delegate void HostPortReceivedEventHandler(int ownPort, int enetPort);
     
     [Signal]
     public delegate void SessionRegisteredEventHandler();
@@ -18,35 +23,42 @@ public partial class HolePuncher : Node
     private const string SERVER_IP = "20.206.244.22";
     private const int SERVER_PORT = 1910;
 
-    public bool IsHost { get; private set; }
+    private bool _isHost;
 
     private static readonly StreamPeerTcp ServerTcp = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     
     private int _ownPort;
-    
-    private Dictionary<byte[], Peer>? _peers;
+    private int _enetPort;
 
     private MessageTypes _punchStep;
 
     private Timer _pingPeerTimer = new();
+    private Timer _portDiscoveryTimer = new();
 
-    private byte _messagesSentRange;
+    private const byte PORT_CASCADE_RANGE = 10;
+    private const byte RESPONSE_WINDOW = 5;
 
     private byte _messagesSent;
+    private bool _enetPortNegotiated;
 
     public override void _Ready()
     {
         _pingPeerTimer.WaitTime = 0.1d;
         _pingPeerTimer.Connect("timeout", new Callable(this, nameof(PingPeer)));
         
+        _portDiscoveryTimer.WaitTime = 0.2d;
+        _portDiscoveryTimer.Connect("timeout", new Callable(this, nameof(DiscoverENetPort)));
+        
         AddChild(_pingPeerTimer);
+        AddChild(_portDiscoveryTimer);
     }
     
-    public void ConnectToServer(bool isHost, string? room, string? nickname, byte maxPeers = 4)
+    public void ConnectToServer(bool isHost, string? room = null, string? nickname = null)
     {
-        IsHost = isHost;
-        _peers = new Dictionary<byte[], Peer>(maxPeers);
+        _isHost = isHost;
+        nickname = nickname is "" or null ? "Player" : nickname;
+        room = room is "" or null ? $"{nickname}'s room" : room;
         
         var error = ServerTcp.ConnectToHost(SERVER_IP, SERVER_PORT);
         if (error != Error.Ok)
@@ -60,6 +72,7 @@ public partial class HolePuncher : Node
         var data = new byte[1 + roomClientBytes.Length];
         //Store isHost on MSB of the first byte and the Message Type on the other 7 bits
         data[0] = (byte)((isHost ? 0x80 : 0x00) | (byte)MessageTypes.SendRegister);
+        
         //Store roomClient string after the first byte
         Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
         
@@ -69,15 +82,35 @@ public partial class HolePuncher : Node
             GD.PrintErr("Error sending server TCP packet: " + error);
     }
     
+    private static int FindAvailableENetPort(int startPort)
+    {
+        var testPeer = new ENetMultiplayerPeer();
+        
+        for (int port = startPort - 50; port <= 50; port++)
+        {
+            if (port > 65535) break;
+            
+            var err = testPeer.CreateServer(port, 1);
+            if (err == Error.Ok)
+            {
+                testPeer.Close();
+                GD.Print($"Found available ENet port: {port}");
+                return port;
+            }
+        }
+        
+        testPeer.Close();
+        return startPort + 100; // Fallback
+    }
+    
     //Process is only used for listening
     public override void _Process(double delta)
     {
         ServerTcp.Poll();
         
         //HandleServerMessages
-        if (ServerTcp.GetStatus() is StreamPeerTcp.Status.Connected && ServerTcp.GetAvailableBytes() > 0)
+        if (ServerTcp.GetAvailableBytes() > 0)
         {
-            //Method GetData returns a Godot.Array with an error code and the data
             var dataArray = ServerTcp.GetData(ServerTcp.GetAvailableBytes());
 
             var error = dataArray[0].As<Error>();
@@ -85,73 +118,93 @@ public partial class HolePuncher : Node
                 GD.PrintErr("Error receiving server TCP packet: " + error);
 
             var data = dataArray[1].As<byte[]>();
-
             var dataType = (MessageTypes)data[0];
 
-            if (dataType is MessageTypes.ReceiveOwnPort)
+            switch (dataType)
             {
-                _ownPort = ToInt32(data, 1);
-                error = PeerUdp.Bind(_ownPort);
-                if (error != Error.Ok)
-                    GD.PrintErr($"Error binding on port {_ownPort}: " + error);
-            }
-            else if (dataType is MessageTypes.ReceivePeerInfo)
-            {
-                var publicIp = new ArraySegment<byte>(data, 1, 4).ToArray();
-                var privateIp = new ArraySegment<byte>(data, 5, 4).ToArray();
-                var port = ToInt32(data, 9);
+                case MessageTypes.ReceiveOwnPort:
+                {
+                    _ownPort = ToInt32(data, 1);
+                    error = PeerUdp.Bind(_ownPort);
+                    if (error != Error.Ok)
+                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+                
+                    if (_isHost)
+                    {
+                        _enetPort = FindAvailableENetPort(_ownPort);
+                        GD.Print($"Host received port {_ownPort} and will use ENet port: {_enetPort}");
+                        
+                        EmitSignal(SignalName.HostPortReceived, _enetPort);
+                    }
 
-                _peers?.Add(publicIp, new Peer(port, privateIp));
-                PeerUdp.SetDestAddress(BytesToIpv4(publicIp), port);
-                _pingPeerTimer.Start();
+                    break;
+                }
+                case MessageTypes.ReceivePeerInfo:
+                {
+                    var publicIp = new ArraySegment<byte>(data, 1, 4).ToArray();
+                    var privateIp = new ArraySegment<byte>(data, 5, 4).ToArray();
+                    var port = ToInt32(data, 9);
+                    
+                    PeerUdp.SetDestAddress(BytesToIpv4(publicIp), port);
+                    _pingPeerTimer.Start();
+                    break;
+                }
+                default:
+                    GD.PrintErr("Unknown server message type: " + dataType);
+                    break;
             }
-            else
-                GD.PrintErr("Unknown server message type: " + dataType);
         }
 
         //HandlePeerMessages
-        if (PeerUdp.IsBound() && PeerUdp.GetAvailablePacketCount() > 0)
+        if (PeerUdp.GetAvailablePacketCount() > 0)
         {
             var error = PeerUdp.GetPacketError();
             if (error != Error.Ok)
                 GD.PrintErr("Error receiving peer UDP packet: " + error);
 
             var data = PeerUdp.GetPacket();
-
             var dataType = (MessageTypes)data[0];
 
-            if (dataType is MessageTypes.Greet or MessageTypes.Confirm)
+            switch (dataType)
             {
-                _ownPort = ToInt32(data, 1);
-                if (_peers != null) _peers[Ipv4ToBytes(PeerUdp.GetPacketIP())].Port = PeerUdp.GetPacketPort();
-                _punchStep = dataType + 1;
-
-                if (!IsHost)
+                case MessageTypes.Greet or MessageTypes.Confirm:
                 {
-                    error = PeerUdp.Bind(_ownPort);
-                    if (error != Error.Ok)
-                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
-                }
+                    _ownPort = ToInt32(data, 1);
+                    _punchStep = dataType + 1;
 
-                _messagesSent = 0;
+                    if (!_isHost)
+                    {
+                        error = PeerUdp.Bind(_ownPort);
+                        if (error != Error.Ok)
+                            GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+                    }
+
+                    _messagesSent = 0;
+                    break;
+                }
+                case MessageTypes.Go:
+                    HandleGoMessage();
+                    break;
+                case MessageTypes.ENetPortInfo:
+                    HandleENetPortInfo(data);
+                    break;
+                case MessageTypes.RequestENetPort:
+                    HandleENetPortRequest();
+                    break;
+                default:
+                    GD.PrintErr("Unknown peer message type: " + dataType);
+                    break;
             }
-            else if (dataType is MessageTypes.Go)
-                HandleGoMessage();
-            else
-                GD.PrintErr("Unknown peer message type: " + dataType);
         }
     }
     
-    // Signaled through Ping Peer Timer
     private void PingPeer()
     {
         var data = new byte[5];
         data[0] = (byte)_punchStep;
         
-        // Only the host should cascade the ports because all the players are connecting to it
-        var portCascadeRange = IsHost ? 10 : 0;
         var targetPort = PeerUdp.GetPacketPort();
-        for (var port = targetPort - portCascadeRange; port <= targetPort + portCascadeRange; port++)
+        for (var port = targetPort - PORT_CASCADE_RANGE; port <= targetPort + PORT_CASCADE_RANGE; port++)
         {
             PeerUdp.SetDestAddress(PeerUdp.GetPacketIP(), port);
             Array.Copy(GetBytes(port), 0, data, 1, 4);
@@ -161,7 +214,7 @@ public partial class HolePuncher : Node
                 GD.PrintErr("Error sending peer UDP packet: " + error);
         }
         
-        if (_messagesSent++ >= _messagesSentRange)
+        if (_messagesSent++ >= RESPONSE_WINDOW)
         {
             _pingPeerTimer.Stop();
             GD.Print("Not received response from peer. Stopping hole punch.");
@@ -177,10 +230,82 @@ public partial class HolePuncher : Node
         if (error != Error.Ok)
             GD.PrintErr("Error sending server TCP packet: " + error);
         
-        PeerUdp.Close();
-        _pingPeerTimer.Stop();
-
         _punchStep = 0;
+        _pingPeerTimer.Stop();
+        
+        if (_isHost)
+            _portDiscoveryTimer.Start();
+        else
+            RequestENetPort();
+        
+        EmitSignal(SignalName.HolePunched, _ownPort);
+    }
+    
+    private void DiscoverENetPort()
+    {
+        if (!_isHost || _enetPortNegotiated) 
+        {
+            _portDiscoveryTimer.Stop();
+            return;
+        }
+        
+        var data = new byte[5];
+        data[0] = (byte)MessageTypes.ENetPortInfo;
+        Array.Copy(GetBytes(_enetPort), 0, data, 1, 4);
+        
+        var error = PeerUdp.PutPacket(data);
+        if (error != Error.Ok)
+            GD.PrintErr("Error sending ENet port info: " + error);
+        else
+            GD.Print($"Sent ENet port info: {_enetPort}");
+    }
+    
+    private void RequestENetPort()
+    {
+        var data = new[] { (byte)MessageTypes.RequestENetPort };
+        var error = PeerUdp.PutPacket(data);
+        if (error != Error.Ok)
+            GD.PrintErr("Error requesting ENet port: " + error);
+        else
+            GD.Print("Requested ENet port from host");
+    }
+    
+    private void HandleENetPortRequest()
+    {
+        if (!_isHost) return;
+        
+        var data = new byte[5];
+        data[0] = (byte)MessageTypes.ENetPortInfo;
+        Array.Copy(GetBytes(_enetPort), 0, data, 1, 4);
+        
+        var error = PeerUdp.PutPacket(data);
+        if (error != Error.Ok)
+            GD.PrintErr("Error sending ENet port response: " + error);
+        else
+            GD.Print($"Responded with ENet port: {_enetPort}");
+    }
+    
+    private void HandleENetPortInfo(byte[] data)
+    {
+        if (_isHost) return;
+        
+        var enetPort = ToInt32(data, 1);
+        var hostAddress = PeerUdp.GetPacketIP();
+        
+        GD.Print($"Received ENet port from host: {enetPort} at {hostAddress}");
+        
+        _enetPortNegotiated = true;
+        EmitSignal(SignalName.ENetPortDiscovered, enetPort, hostAddress);
+    }
+    
+    public int GetENetPort() => _enetPort;
+
+    public override void _ExitTree()
+    {
+        PeerUdp.Close();
+        ServerTcp.DisconnectFromHost();
+        _pingPeerTimer.Stop();
+        _portDiscoveryTimer.Stop();
     }
     
     private enum MessageTypes : byte
@@ -191,19 +316,9 @@ public partial class HolePuncher : Node
         ReceivePeerInfo,
         Greet,
         Confirm,
-        Go
-    }
-
-    private class Peer
-    {
-        public int Port { get; set; }
-        public byte[] PrivateIp { get; set; }
-
-        public Peer(int port, byte[] privateIp)
-        {
-            Port = port;
-            PrivateIp = privateIp;
-        }
+        Go,
+        ENetPortInfo,
+        RequestENetPort
     }
 
     private static byte[] Ipv4ToBytes(string ip)

@@ -9,15 +9,15 @@ namespace UltraPong;
 public partial class HolePuncher : Node
 {
     [Signal]
-    public delegate void ENetPortDiscoveredEventHandler(ushort enetPort, string hostsAddress);
+    public delegate void ENetPortDiscoveredEventHandler(string hostAddress, ushort hostPort);
     
     [Signal]
-    public delegate void HostPortReceivedEventHandler(ushort ownPort, ushort enetPort);
+    public delegate void HostPortReceivedEventHandler(ushort enetPort);
     
     [Signal]
     public delegate void SessionRegisteredEventHandler();
     
-    private static readonly StreamPeerTcp ServerTcp = new();
+    private static readonly PacketPeerUdp ServerUdp = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     
     private const string SERVER_IP = "20.206.244.22";
@@ -28,13 +28,18 @@ public partial class HolePuncher : Node
     private ushort _ownPort;
     private ushort _enetPort;
 
+    // Used for sending messages
     private MessageTypes _punchStep = MessageTypes.Greet;
+    
+    // Used for receiving messages
+    private bool _receivedGo;
 
     private Timer _pingPeerTimer = new();
 
     private const byte PORT_CASCADE_RANGE = 10;
     private const byte RESPONSE_WINDOW = 10;
 
+    // Messages of the same type sent
     private byte _messagesSent;
     
     private Peer? _currentPeer;
@@ -50,16 +55,17 @@ public partial class HolePuncher : Node
         AddChild(_pingPeerTimer);
     }
     
-    public async Task ConnectToServer(bool isHost, string nickname = "", string room = "")
+    public void ConnectToServer(bool isHost, string nickname = "", string room = "")
     {
         _isHost = isHost;
+        
         nickname = nickname.Replace(RESERVED_CHAR, '_');
         room = room.Replace(RESERVED_CHAR, '_');
         
         nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
         
-        var error = ServerTcp.ConnectToHost(SERVER_IP, SERVER_PORT);
+        var error = ServerUdp.ConnectToHost(SERVER_IP, SERVER_PORT);
         if (error != Error.Ok)
         {
             GD.PrintErr("Error connecting to server: " + error);
@@ -74,23 +80,17 @@ public partial class HolePuncher : Node
         //Store roomClient string after the first byte
         Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
         
-        await ((Func<Task>)(async () =>
-            {
-                while (ServerTcp.GetStatus() is not StreamPeerTcp.Status.Connected)
-                {
-                    if (ServerTcp.GetStatus() is StreamPeerTcp.Status.Error)
-                        throw new Exception("Server connection failed");
-                    await Task.Delay(50);
-                }
-
-                await Task.Delay(100);
-                GD.Print("Server connection established");
-            }))();
-        
-        error = ServerTcp.PutData(data);
+        // Envia dados via UDP
+        error = ServerUdp.PutPacket(data);
         if (error != Error.Ok)
-            GD.PrintErr("Error sending server TCP packet: " + error);
+        {
+            GD.PrintErr("Error sending server packet: " + error);
+            return;
+        }
+        
+        GD.Print("Registration packet sent to server");
     }
+    
     
     private static ushort FindAvailableENetPort(ushort startPort)
     {
@@ -115,18 +115,17 @@ public partial class HolePuncher : Node
     //Process is only used for listening
     public override void _Process(double delta)
     {
-        ServerTcp.Poll();
-        
         //HandleServerMessages
-        if (ServerTcp.GetStatus() == StreamPeerTcp.Status.Connected && ServerTcp.GetAvailableBytes() > 0)
+        if (ServerUdp.IsBound() && ServerUdp.GetAvailablePacketCount() > 0)
         {
-            var dataArray = ServerTcp.GetData(ServerTcp.GetAvailableBytes());
-
-            var error = dataArray[0].As<Error>();
+            var error = ServerUdp.GetPacketError();
             if (error != Error.Ok)
-                GD.PrintErr("Error receiving server TCP packet: " + error);
+            {
+                GD.PrintErr("Error receiving server packet: " + error);
+                return;
+            }
 
-            var data = dataArray[1].As<byte[]>();
+            var data = ServerUdp.GetPacket();
             if (data.Length == 0) return;
             
             var dataType = (MessageTypes)data[0];
@@ -138,19 +137,10 @@ public partial class HolePuncher : Node
                     if (data.Length < 3) // 1 + 2
                     {
                         GD.PrintErr("Invalid ReceiveOwnPort message length");
-                        break;
+                        return;
                     }
                     
                     _ownPort = ToUInt16BigEndian(data, 1);
-                    
-                    if (PeerUdp.IsBound())
-                        PeerUdp.Close();
-                    
-                    error = PeerUdp.Bind(_ownPort);
-                    if (error != Error.Ok)
-                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
-                    else
-                        GD.Print("Binding on port " + _ownPort);
                     
                     if (_isHost)
                     {
@@ -170,9 +160,6 @@ public partial class HolePuncher : Node
                         break;
                     }
                     
-                    if (!_isHost)
-                        ServerTcp.DisconnectFromHost();
-
                     _ = StartHolePunching(data);
                     break;
                 }
@@ -185,8 +172,6 @@ public partial class HolePuncher : Node
         //HandlePeerMessages
         if (PeerUdp.IsBound() && PeerUdp.GetAvailablePacketCount() > 0)
         {
-            GD.Print("Received message from peer");
-            
             var error = PeerUdp.GetPacketError();
             if (error != Error.Ok)
                 GD.PrintErr("Error receiving peer UDP packet: " + error);
@@ -199,31 +184,42 @@ public partial class HolePuncher : Node
             }
             
             var dataType = (MessageTypes)data[0];
-
+            
             switch (dataType)
             {
                 case MessageTypes.Greet or MessageTypes.Confirm:
+                    _messagesSent = 0;
+                    
                     if (data.Length < 3)
                     {
                         GD.PrintErr($"Invalid {dataType} message length");
                         break;
                     }
                     
-                    _ownPort = ToUInt16BigEndian(data, 1);
                     _punchStep = dataType + 1;
                     
-                    if (PeerUdp.IsBound()) PeerUdp.Close();
-                    
-                    error = PeerUdp.Bind(_ownPort);
-                    if (error != Error.Ok)
-                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
-                    else
-                        GD.Print("Binding on port " + _ownPort);
-
-                    _messagesSent = 0;
+                    var receivedPort = ToUInt16BigEndian(data, 1);
+                    if (_ownPort != receivedPort) {
+                        
+                        GD.Print($"Port mismatch: own={_ownPort}, received={receivedPort}");
+                        
+                        _ownPort = receivedPort;
+                        
+                        PeerUdp.Close();
+                        
+                        error = PeerUdp.Bind(_ownPort);
+                        if (error != Error.Ok)
+                            GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+                        else
+                            GD.Print("Binding on port " + _ownPort);
+                    }
                     break;
                 case MessageTypes.Go:
-                    _pingPeerTimer.Stop();
+                    if (_receivedGo) return;
+                    
+                    _receivedGo = true;
+                    _punchStep = MessageTypes.Go;
+                    
                     if (!_isHost && data.Length >= 3)
                     {
                         var hostEnetPort = ToUInt16BigEndian(data, 1);
@@ -233,11 +229,14 @@ public partial class HolePuncher : Node
                         EmitSignal(SignalName.ENetPortDiscovered, hostAddress, hostEnetPort);
                         return;
                     }
-        
-                    var responseData = new[] { (byte)MessageTypes.SendHolePunched };
-                    error = ServerTcp.PutData(responseData);
+                    
+                    ServerUdp.SetDestAddress(SERVER_IP, SERVER_PORT);
+                    
+                    error = ServerUdp.PutPacket(new []{ (byte)MessageTypes.SendHolePunched });
                     if (error != Error.Ok)
-                        GD.PrintErr("Error sending server TCP packet: " + error);
+                        GD.PrintErr("Error sending hole punched message to server: " + error);
+                    else
+                        GD.Print("Sent hole punched message to server");
                     break;
                 default:
                     GD.PrintErr("Unknown peer message type: " + dataType);
@@ -250,6 +249,17 @@ public partial class HolePuncher : Node
     {
         _punchStep = MessageTypes.Greet;
         _messagesSent = 0;
+        
+        ServerUdp.Close();
+        
+        var error = PeerUdp.Bind(_ownPort);
+        if (error != Error.Ok)
+        {
+            GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+            return;
+        }
+                    
+        GD.Print("Binding on port " + _ownPort);
         
         byte offset = 1;
         // Timestamp to start hole punching
@@ -284,8 +294,6 @@ public partial class HolePuncher : Node
                     var millisecondsToNextSecond = 1000 - now.Millisecond;
                     if (millisecondsToNextSecond < 1000)
                         await Task.Delay(millisecondsToNextSecond);
-            
-                    GD.Print($"Timestamp synchronized at {timestampSec + 1} seconds");
                     break;
                 }
         
@@ -293,7 +301,6 @@ public partial class HolePuncher : Node
             }
         }))();
         
-        GD.Print("Start pinging peer at: " + DateTime.Now.ToString("HH:mm:ss.fff"));
         _pingPeerTimer.Start();
     }
     
@@ -308,16 +315,11 @@ public partial class HolePuncher : Node
         var targetPort = _currentPeer.Port;
     
         if (_isHost && _punchStep == MessageTypes.Go)
-        {
             Array.Copy(GetBytesBigEndian(_enetPort), 0, data, 1, 2);
-            GD.Print($"Host sending Go message with ENet port: {_enetPort}");
-        }
         else
             Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
         
-        // TODO: Implement private IP connection
-        var ip = _currentPeer.PublicIp;
-        //foreach (var ip in new[] { _currentPeer.PublicIp, _currentPeer.PrivateIp })
+        foreach (var ip in new[] { _currentPeer.PublicIp, _currentPeer.PrivateIp })
             for (var port = (ushort)(targetPort - PORT_CASCADE_RANGE); port <= targetPort + PORT_CASCADE_RANGE; port++)
             {
                 if (port < 1024) continue;
@@ -325,29 +327,33 @@ public partial class HolePuncher : Node
                 var error = PeerUdp.SetDestAddress(ip, port);
                 if (error != Error.Ok)
                 {
-                    GD.PrintErr($"Error setting UDP address to {ip}:{port}: " + error);
+                    GD.PrintErr($"Error setting peer address to {ip}:{port}: " + error);
                     continue;
                 }
 
-                GD.Print($"Sending ping to peer on {ip}:{port} (step: {_punchStep})");
-
                 error = PeerUdp.PutPacket(data);
                 if (error != Error.Ok)
-                    GD.PrintErr($"Error sending peer UDP packet to {ip}:{port}: " + error);
+                    GD.PrintErr($"Error sending peer packet to {ip}:{port}: " + error);
             }
-    
-        if (_messagesSent++ >= RESPONSE_WINDOW)
+
+        if (_messagesSent++ < RESPONSE_WINDOW) return;
+        
+        _pingPeerTimer.Stop();
+
+        if (_receivedGo)
         {
-            _pingPeerTimer.Stop();
-            GD.Print("Not received response from peer. Stopping hole punch.");
+            GD.Print("Received go and sent back, disposing Hole Puncher");
+            Dispose();
         }
+        else
+            GD.Print($"Not received {_punchStep + 1} from peer. Stopping hole punch.");
     }
 
 
     public override void _ExitTree()
     {
         PeerUdp.Close();
-        ServerTcp.DisconnectFromHost();
+        ServerUdp.Close();
         _pingPeerTimer.Stop();
     }
 
@@ -381,7 +387,7 @@ public partial class HolePuncher : Node
         // 1 byte for message type
         SendHolePunched,
         
-        // 1 byte for message type and 2 bytes for port
+        // 1 byte for message type and 2 bytes for port = 3
         ReceiveOwnPort,
         
         // 1 byte for message type, 1 byte for timestamp, 4 bytes for public IP, 4 bytes for private IP and 2 bytes for port

@@ -7,6 +7,7 @@ public partial class Menu : Control
 	private static readonly UserStats UserStats = JsonFileAccess.Read<UserStats>("user://userStats.json");
 	private string Room => GetNode<LineEdit>("Room").Text;
 	private HolePuncher HolePuncher => GetNode<HolePuncher>("/root/HolePuncher");
+	private MultiplayerApi TreeMultiplayer => GetTree().GetMultiplayer();
 
 	public override void _Ready()
 	{
@@ -17,10 +18,9 @@ public partial class Menu : Control
 		nicknameNode.GrabFocus();
 		nicknameNode.CaretColumn = nicknameNode.Text.Length;
 		
-		HolePuncher.Connect(HolePuncher.SignalName.ENetPortDiscovered, 
-			new Callable(this, nameof(OnENetPortDiscovered)));
-		HolePuncher.Connect(HolePuncher.SignalName.HostPortReceived, 
-			new Callable(this, nameof(OnHostPortReceived)));
+		HolePuncher.ENetPortDiscovered += OnENetPortDiscovered;
+		HolePuncher.HostPortReceived += OnHostPortReceived;
+		TreeMultiplayer.ConnectedToServer += OnEnetConnected;
 
 		if (OS.HasFeature("dedicated_server"))
 			SetupRoom(true);
@@ -33,7 +33,7 @@ public partial class Menu : Control
 		
 		JsonFileAccess.Write("user://userStats.json", UserStats);
 		
-		_ = HolePuncher.ConnectToServer(isHost, UserStats.Nickname, Room);
+		HolePuncher.ConnectToServer(isHost, UserStats.Nickname, Room);
 	}
 	
 	// Signaled through Hole Puncher node
@@ -50,7 +50,7 @@ public partial class Menu : Control
 		
 		GD.Print("ENet server created successfully");
 		
-		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
+		TreeMultiplayer.SetMultiplayerPeer(peer);
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 	
@@ -67,15 +67,23 @@ public partial class Menu : Control
 			return;
 		}
 		
-		GD.Print($"Connected to ENet server at {hostAddress}:{enetPort}");
+		GD.Print($"Connecting to ENet server at {hostAddress}:{enetPort}");
 		
-		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
+		TreeMultiplayer.SetMultiplayerPeer(peer);
+	}
+
+	// Signaled when the Tree Multiplayer Peer connects
+	private void OnEnetConnected()
+	{
+		GD.Print("Connected to ENet server, changing scene");
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 
 	public override void _ExitTree()
 	{
-		HolePuncher.Disconnect(HolePuncher.SignalName.ENetPortDiscovered, new Callable(this, nameof(OnENetPortDiscovered)));
-		HolePuncher.Disconnect(HolePuncher.SignalName.HostPortReceived, new Callable(this, nameof(OnHostPortReceived)));
+		HolePuncher.ENetPortDiscovered -= OnENetPortDiscovered;
+		HolePuncher.HostPortReceived -= OnHostPortReceived;
+		
+		TreeMultiplayer.ConnectedToServer -= OnEnetConnected;
 	}
 }

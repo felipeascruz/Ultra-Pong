@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using Godot;
@@ -39,20 +38,26 @@ public partial class HolePuncher : Node
     private byte _messagesSent;
     
     private Peer? _currentPeer;
+
+    // Char used in packet protocol
+    public const char RESERVED_CHAR = ':';
     
     public override void _Ready()
     {
-        _pingPeerTimer.WaitTime = 0.1d;
+        _pingPeerTimer.WaitTime = 0.4d;
         _pingPeerTimer.Connect("timeout", new Callable(this, nameof(PingPeer)));
         
         AddChild(_pingPeerTimer);
     }
     
-    public async void ConnectToServer(bool isHost, string? room = null, string? nickname = null)
+    public async Task ConnectToServer(bool isHost, string nickname = "", string room = "")
     {
         _isHost = isHost;
-        nickname = nickname is "" or null ? "Player" : nickname;
-        room = room is "" or null ? $"{nickname}'s room" : room;
+        nickname = nickname.Replace(RESERVED_CHAR, '_');
+        room = room.Replace(RESERVED_CHAR, '_');
+        
+        nickname = nickname == "" ? "Player" : nickname;
+        room = room == "" ? $"{nickname}'s room" : room;
         
         var error = ServerTcp.ConnectToHost(SERVER_IP, SERVER_PORT);
         if (error != Error.Ok)
@@ -61,7 +66,7 @@ public partial class HolePuncher : Node
             return;
         }
         
-        var roomClientBytes = Encoding.UTF8.GetBytes($"{room}:{nickname}");
+        var roomClientBytes = Encoding.UTF8.GetBytes($"{room}{RESERVED_CHAR}{nickname}");
         
         var data = new byte[1 + roomClientBytes.Length];
         //Store isHost on MSB of the first byte and the Message Type on the other 7 bits
@@ -69,32 +74,29 @@ public partial class HolePuncher : Node
         //Store roomClient string after the first byte
         Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
         
-        await WaitServerConnection();
+        await ((Func<Task>)(async () =>
+            {
+                while (ServerTcp.GetStatus() is not StreamPeerTcp.Status.Connected)
+                {
+                    if (ServerTcp.GetStatus() is StreamPeerTcp.Status.Error)
+                        throw new Exception("Server connection failed");
+                    await Task.Delay(50);
+                }
+
+                await Task.Delay(100);
+                GD.Print("Server connection established!");
+            }))();
         
         error = ServerTcp.PutData(data);
         if (error != Error.Ok)
             GD.PrintErr("Error sending server TCP packet: " + error);
-    }
-
-    private static async Task WaitServerConnection()
-    {
-        while (ServerTcp.GetStatus() is not StreamPeerTcp.Status.Connected)
-        {
-            if (ServerTcp.GetStatus() is StreamPeerTcp.Status.Error)
-                throw new Exception("Server connection failed");
-            await Task.Delay(50);
-        }
-        
-        await Task.Delay(100);
-        
-        GD.Print("Server connection established!");
     }
     
     private static ushort FindAvailableENetPort(ushort startPort)
     {
         var testPeer = new ENetMultiplayerPeer();
         
-        for (int port = startPort - 50; port <= startPort + 50 && port <= 65535; port++)
+        for (var port = (ushort)(startPort - 50); port <= startPort + 50; port++)
         {
             if (port < 1024) continue;
             
@@ -103,7 +105,7 @@ public partial class HolePuncher : Node
             
             testPeer.Close();
             GD.Print($"Found available ENet port: {port}");
-            return (ushort)port;
+            return port;
         }
         
         testPeer.Close();
@@ -140,11 +142,17 @@ public partial class HolePuncher : Node
                     }
                     
                     _ownPort = ToUInt16BigEndian(data, 1);
-                    error = PeerUdp.Bind(_ownPort);
+
+                    error = PeerUdp.Bind(0);
                     if (error != Error.Ok)
-                        GD.PrintErr($"Error binding on port {_ownPort}: " + error);
-                    else
-                        GD.Print("Binding on port " + _ownPort);;
+                    {
+                        error = PeerUdp.Bind(_ownPort);
+                        if (error != Error.Ok)
+                            GD.PrintErr($"Error binding on port {_ownPort}: " + error);
+                        else
+                            GD.Print("Binding on port " + _ownPort);
+                    }
+                    
                 
                     if (_isHost)
                     {
@@ -163,6 +171,8 @@ public partial class HolePuncher : Node
                         GD.PrintErr("Invalid ReceivePeerInfo message length");
                         break;
                     }
+                    
+                    if (!_isHost) ServerTcp.DisconnectFromHost();
 
                     byte offset = 1;
                     var publicIp = new ArraySegment<byte>(data, offset, 4).ToArray();
@@ -187,6 +197,8 @@ public partial class HolePuncher : Node
                     break;
             }
         }
+        
+        if (PeerUdp.IsBound()) GD.Print("Peer is bound");
 
         //HandlePeerMessages
         if (PeerUdp.IsBound() && PeerUdp.GetAvailablePacketCount() > 0)
@@ -253,6 +265,7 @@ public partial class HolePuncher : Node
         }
     }
     
+    // Signaled through Ping Peer Timer
     private void PingPeer()
     {
         if (_currentPeer == null) return;
@@ -269,24 +282,28 @@ public partial class HolePuncher : Node
         }
         else
             Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
-    
-        foreach (var ip in new[] { _currentPeer.PublicIp, _currentPeer.PrivateIp })
-        {
-            for (var port = targetPort - PORT_CASCADE_RANGE; port <= targetPort + PORT_CASCADE_RANGE; port++)
+
+        var ip = _currentPeer.PublicIp;
+        //foreach (var ip in new[] { _currentPeer.PublicIp, _currentPeer.PrivateIp })
+            for (var port = (ushort)(targetPort - PORT_CASCADE_RANGE); port <= targetPort + PORT_CASCADE_RANGE; port++)
             {
-                if (port is < 1024 or > 65535) continue;
+                if (port < 1024) continue;
             
-                PeerUdp.SetDestAddress(ip, port);
-            
+                var error = PeerUdp.SetDestAddress(ip, port);
+                if (error != Error.Ok)
+                {
+                    GD.PrintErr($"Error setting UDP address to {ip}:{port}: " + error);
+                    continue;
+                }
+
                 GD.Print($"Sending ping to peer on {ip}:{port} (step: {_punchStep})");
 
-                var error = PeerUdp.PutPacket(data);
+                error = PeerUdp.PutPacket(data);
                 if (error != Error.Ok)
                     GD.PrintErr($"Error sending peer UDP packet to {ip}:{port}: " + error);
             }
-        }
     
-        if (_messagesSent++ >= RESPONSE_WINDOW)
+        if (_messagesSent++ > RESPONSE_WINDOW)
         {
             _pingPeerTimer.Stop();
             GD.Print("Not received response from peer. Stopping hole punch.");
@@ -306,7 +323,8 @@ public partial class HolePuncher : Node
         if (startIndex + 2 > data.Length)
             throw new ArgumentOutOfRangeException(nameof(startIndex), "Not enough bytes to read UInt16");
 
-        if (!BitConverter.IsLittleEndian) return BitConverter.ToUInt16(data, startIndex);
+        if (!BitConverter.IsLittleEndian) 
+            return BitConverter.ToUInt16(data, startIndex);
         
         var bytes = new byte[2];
         Array.Copy(data, startIndex, bytes, 0, 2);
@@ -317,7 +335,7 @@ public partial class HolePuncher : Node
     private static byte[] GetBytesBigEndian(ushort value)
     {
         var bytes = BitConverter.GetBytes(value);
-        if (BitConverter.IsLittleEndian)
+        if (BitConverter.IsLittleEndian) 
             Array.Reverse(bytes);
         return bytes;
     }
@@ -346,9 +364,15 @@ public partial class HolePuncher : Node
         Go
     }
 
-    private static byte[] Ipv4ToBytes(string ip)
+    private static byte[]? Ipv4ToBytes(string ip)
     {
         var ipArray = ip.Split('.');
+        if (ipArray.Length != 4)
+        {
+            GD.PrintErr("Invalid IP address format");
+            return null;
+        }
+        
         var ipBytes = new byte[4];
         for (var i = 0; i < 4; i++)
             ipBytes[i] = byte.Parse(ipArray[i]);

@@ -33,7 +33,7 @@ public partial class Menu : Control
 		
 		JsonFileAccess.Write("user://userStats.json", UserStats);
 		
-		HolePuncher.ConnectToServer(isHost, Room, UserStats.Nickname);
+		_ = HolePuncher.ConnectToServer(isHost, UserStats.Nickname, Room);
 	}
 	
 	// Signaled through Hole Puncher node
@@ -44,11 +44,11 @@ public partial class Menu : Control
 		var err = peer.CreateServer(enetPort, 4);
 		if (err != Error.Ok)
 		{
-			GD.PrintErr($"Error creating ENet host: " + err);
+			GD.PrintErr("Error creating ENet host: " + err);
 			return;
 		}
 		
-		GD.Print($"ENet server created successfully");
+		GD.Print("ENet server created successfully");
 		
 		GetTree().GetMultiplayer().SetMultiplayerPeer(peer);
 		GetTree().ChangeSceneToFile("res://Main.tscn");

@@ -36,9 +36,9 @@ public partial class Menu : Control
 		HolePuncher.ConnectToServer(isHost, Room, UserStats.Nickname);
 	}
 	
-	private void OnHostPortReceived(int enetPort)
+	// Signaled through Hole Puncher node
+	private void OnHostPortReceived(ushort enetPort)
 	{
-		GD.Print($"Host received ENet port from server: {enetPort}");
 		var peer = new ENetMultiplayerPeer();
 		
 		var err = peer.CreateServer(enetPort, 4);
@@ -55,7 +55,7 @@ public partial class Menu : Control
 	}
 	
 	// Signaled through Hole Puncher node
-	private void OnENetPortDiscovered(int enetPort, string hostAddress)
+	private void OnENetPortDiscovered(string hostAddress, ushort enetPort)
 	{
 		GD.Print($"Discovered host ENet port: {enetPort} at {hostAddress}");
 		var peer = new ENetMultiplayerPeer();

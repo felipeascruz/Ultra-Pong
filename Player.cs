@@ -49,8 +49,10 @@ public partial class Player : CharacterBody2D
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
 		
 		if (!IsLocalPlayer) return;
-		if (DisplayServer.WindowGetMode() == DisplayServer.WindowMode.ExclusiveFullscreen)
-			MouseMode = MouseModeEnum.Captured;
+		
+		if (DisplayServer.WindowGetMode() is 
+		    DisplayServer.WindowMode.ExclusiveFullscreen or DisplayServer.WindowMode.Fullscreen)
+				MouseMode = MouseModeEnum.Captured;
 
 		var indicatorModel = new Sprite2D
 			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01F, 0.01F) };

@@ -6,12 +6,12 @@ using Godot;
 
 namespace UltraPong;
 
-public partial class HolePuncher : Node
+public partial class HolePuncherENet : Node
 {
     [Signal]
     public delegate void RoomRegisteredEventHandler();
     
-    private static readonly PacketPeerUdp ServerUdp = new();
+    private static readonly ENetMultiplayerPeer ServerENet = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     private static readonly ENetConnection PeerENetConnection = new();
     
@@ -61,7 +61,7 @@ public partial class HolePuncher : Node
         nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
         
-        var error = ServerUdp.ConnectToHost(SERVER_IP, SERVER_PORT);
+        var error = ServerENet.CreateClient(SERVER_IP, SERVER_PORT);
         if (error != Error.Ok)
         {
             GD.PrintErr("Error connecting to server: " + error);
@@ -76,7 +76,7 @@ public partial class HolePuncher : Node
         //Store roomClient string after the first byte
         Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
         
-        error = ServerUdp.PutPacket(data);
+        error = ServerENet.PutPacket(data);
         if (error != Error.Ok)
         {
             GD.PrintErr("Error sending server packet: " + error);
@@ -90,16 +90,17 @@ public partial class HolePuncher : Node
     public override void _Process(double delta)
     {
         //HandleServerMessages
-        if (ServerUdp.IsBound() && ServerUdp.GetAvailablePacketCount() > 0)
+        if (ServerENet.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected && 
+            ServerENet.GetAvailablePacketCount() > 0)
         {
-            var error = ServerUdp.GetPacketError();
+            var error = ServerENet.GetPacketError();
             if (error != Error.Ok)
             {
                 GD.PrintErr("Error receiving server packet: " + error);
                 return;
             }
 
-            var data = ServerUdp.GetPacket();
+            var data = ServerENet.GetPacket();
             if (data.Length == 0) return;
             
             var dataType = (MessageTypes)data[0];
@@ -210,7 +211,7 @@ public partial class HolePuncher : Node
         _punchStep = MessageTypes.Greet;
         _messagesSent = 0;
         
-        ServerUdp.Close();
+        ServerENet.Close();
         
         var error = PeerUdp.Bind(_ownPort);
         if (error != Error.Ok)
@@ -371,9 +372,9 @@ public partial class HolePuncher : Node
     
         GetTree().GetRoot().GetNode<ENetManager>("ENetManager").ConnectToPeer(PeerENetConnection);
 
-        ServerUdp.SetDestAddress(SERVER_IP, SERVER_PORT);
+        ServerENet.CreateClient(SERVER_IP, SERVER_PORT);
 
-        error = ServerUdp.PutPacket([(byte)MessageTypes.SendHolePunched]);
+        error = ServerENet.PutPacket([(byte)MessageTypes.SendHolePunched]);
         if (error != Error.Ok)
             GD.PrintErr("Error sending hole punched message to server: " + error);
         else
@@ -383,7 +384,7 @@ public partial class HolePuncher : Node
     public override void _ExitTree()
     {
         PeerUdp.Close();
-        ServerUdp.Close();
+        ServerENet.Close();
         _pingPeerTimer.Stop();
     }
 

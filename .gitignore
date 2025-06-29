@@ -17,3 +17,4 @@ mono_crash.*.json
 # My ignores
 7zip
 .idea
+.env

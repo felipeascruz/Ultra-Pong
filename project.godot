@@ -48,7 +48,7 @@ naming/default_signal_callback_name="On{signal_name}"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/Holepunch/plugin.cfg")
+enabled=PackedStringArray()
 
 [gui]
 

@@ -73,7 +73,7 @@ public partial class WorldHandler : Node
 			GetNodeOrNull(World + "Choose Team").QueueFree();
 		
 		if (players.GetChildren().Cast<Player>().Any(node => node.Name == id.ToString() + deviceType + deviceNumber))
-			await ToSignal(GetTree().CreateTimer(0.1D), "timeout");
+			await ToSignal(GetTree().CreateTimer(0.1d), "timeout");
 		
 		var player = GD.Load<PackedScene>("res://Player.tscn").Instantiate<Player>();
 		player.GetNode<Label>("Nickname").Text = nickname.Length > 50 ? nickname[..50] : nickname;

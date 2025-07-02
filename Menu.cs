@@ -7,7 +7,7 @@ public partial class Menu : Control
 	private static readonly UserStats UserStats = JsonFileAccess.Read<UserStats>("user://userStats.json");
 	private LineEdit RoomNode => GetNode<LineEdit>("Room");
 	private LineEdit NicknameNode => GetNode<LineEdit>("Nickname");
-	private HolePuncher HolePuncher => GetNode<HolePuncher>("/root/HolePuncher");
+	private ENetManager _eNetManager = new();
 	private MultiplayerApi TreeMultiplayer => GetTree().GetMultiplayer();
 
 	public override void _Ready()
@@ -18,7 +18,7 @@ public partial class Menu : Control
 		NicknameNode.GrabFocus();
 		NicknameNode.CaretColumn = NicknameNode.Text.Length;
 		
-		HolePuncher.RoomRegistered += OnRoomRegistered;
+		_eNetManager.RoomRegistered += OnRoomRegistered;
 		TreeMultiplayer.ConnectedToServer += OnEnetConnected;
 
 		if (OS.HasFeature("dedicated_server"))
@@ -27,25 +27,25 @@ public partial class Menu : Control
 
 	private void SetupRoom(bool isHost)
 	{
-		if (NicknameNode.Text.Contains(HolePuncher.RESERVED_CHAR))
-			NicknameNode.Text = NicknameNode.Text.Replace(HolePuncher.RESERVED_CHAR, '_');
-		if (RoomNode.Text.Contains(HolePuncher.RESERVED_CHAR))
-			RoomNode.Text = RoomNode.Text.Replace(HolePuncher.RESERVED_CHAR, '_');
+		if (NicknameNode.Text.Contains(ENetManager.RESERVED_CHAR))
+			NicknameNode.Text = NicknameNode.Text.Replace(ENetManager.RESERVED_CHAR, '_');
+		if (RoomNode.Text.Contains(ENetManager.RESERVED_CHAR))
+			RoomNode.Text = RoomNode.Text.Replace(ENetManager.RESERVED_CHAR, '_');
 		
 		UserStats.Nickname = NicknameNode.Text;
 		UserStats.Sensitivity = (float)GetNode<HSlider>("Sensitivity").Value;
 		
 		JsonFileAccess.Write("user://userStats.json", UserStats);
 		
-		GetTree().GetRoot().CallDeferred("add_child", new ENetManager(isHost){Name = "ENetManager"}, true);
+		GetTree().GetRoot().CallDeferred("add_child", _eNetManager, true);
 		
-		HolePuncher.ConnectToServer(isHost, UserStats.Nickname, RoomNode.Text);
+		_eNetManager.ConnectToICEServer(isHost, UserStats.Nickname, RoomNode.Text);
 	}
 
-	// Signaled when the Tree Multiplayer Peer connects
+	// Signaled when the Tree Multiplayer Peer connects to host
 	private void OnEnetConnected()
 	{
-		GD.Print("Connected to ENet server, changing scene");
+		GD.Print("Connected to ENet host, changing scene");
 		GetTree().ChangeSceneToFile("res://Main.tscn");
 	}
 	
@@ -58,6 +58,6 @@ public partial class Menu : Control
 	public override void _ExitTree()
 	{
 		TreeMultiplayer.ConnectedToServer -= OnEnetConnected;
-		HolePuncher.RoomRegistered -= OnRoomRegistered;
+		_eNetManager.RoomRegistered -= OnRoomRegistered;
 	}
 }

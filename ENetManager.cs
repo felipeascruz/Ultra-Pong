@@ -8,6 +8,8 @@ namespace UltraPong;
 
 public partial class ENetManager : Node
 {
+    // TODO: implement private IP tries before hole punching
+    
     [Signal]
     public delegate void RoomRegisteredEventHandler();
     
@@ -22,7 +24,6 @@ public partial class ENetManager : Node
     private bool _isHost;
     
     private ushort _ownPort;
-    private ushort _enetPort;
 
     // Used for sending messages
     private MessageTypes _punchStep = MessageTypes.Greet;
@@ -32,7 +33,7 @@ public partial class ENetManager : Node
 
     private Timer _pingPeerTimer = new();
 
-    private const byte ATTEMPT_RANGE = 10;
+    private const byte ATTEMPT_RANGE = 20;
     private const byte PORT_CASCADE_RANGE = 10;
     private const byte RESPONSE_WINDOW = 10;
 
@@ -62,15 +63,6 @@ public partial class ENetManager : Node
     {
         _isHost = isHost;
 
-        var privateIPs = IP.GetLocalAddresses();
-        var privateIp = "0.0.0.0";
-        foreach (var ip in privateIPs)
-            if (ip.StartsWith("10.111.") || ip.StartsWith("192.168."))
-            {
-                privateIp = ip;
-                break;
-            }
-
         nickname = nickname.Replace(RESERVED_CHAR, '_');
         room = room.Replace(RESERVED_CHAR, '_');
         
@@ -90,10 +82,7 @@ public partial class ENetManager : Node
         // Store isHost on MSB of the first byte and the Message Type on the other 7 bits
         data[0] = (byte)((isHost ? 0x80 : 0x00) | (byte)MessageTypes.SendRegister);
         
-        // Store private IP after first byte
-        Array.Copy(Ipv4ToBytes(privateIp) ?? [0,0,0,0], 0, data, 1, roomClientBytes.Length);
-        
-        // Store roomClient string after private IP
+        // Store roomClient string after first byte
         Array.Copy(roomClientBytes, 0, data, 5, roomClientBytes.Length);
         
         error = ServerENet.PutPacket(data);
@@ -253,20 +242,17 @@ public partial class ENetManager : Node
         var publicIp = new ArraySegment<byte>(data, offset, 4).ToArray();
         offset += 4;
                     
-        var privateIp = new ArraySegment<byte>(data, offset, 4).ToArray();
-        offset += 4;
-                    
         var port = ToUInt16BigEndian(data, offset);
         offset += 2;
                     
         var nickname = Encoding.UTF8.GetString(data, offset, data.Length - offset);
 
-        _currentPeer = new Peer(BytesToIpv4(publicIp),  BytesToIpv4(privateIp),  port, nickname);
+        _currentPeer = new Peer(BytesToIpv4(publicIp),  port, nickname);
         
         // Wait for timestamp synchronization
         await Task.Delay(timestampMilliSec);
         
-        GD.Print("Starting hole punching at " + DateTime.Now.ToString("HH:mm:ss.fff"));;
+        GD.Print("Starting hole punching at " + DateTime.Now.ToString("HH:mm:ss.fff"));
         
         _pingPeerTimer.Start();
     }
@@ -281,22 +267,21 @@ public partial class ENetManager : Node
     
         var targetPort = _currentPeer.Port;
         
-        foreach (var ip in new[] { _currentPeer.PublicIp, _currentPeer.PrivateIp })
-            for (byte attempt = 0; attempt <= ATTEMPT_RANGE; attempt++)
-                for (var port = (ushort)(targetPort - PORT_CASCADE_RANGE); port <= targetPort + PORT_CASCADE_RANGE; port++)
-                {
-                    if (port < 1024) continue;
+        for (byte attempt = 0; attempt <= ATTEMPT_RANGE; attempt++)
+            for (var port = (ushort)(targetPort - PORT_CASCADE_RANGE); port <= targetPort + PORT_CASCADE_RANGE; port++)
+            {
+                if (port < 1024) continue;
+            
+                Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
                 
-                    Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
-                    
-                    var error = PeerUdp.SetDestAddress(ip, port);
-                    if (error != Error.Ok)
-                        GD.PrintErr($"Error setting peer UDP destination address: {error}");
-                    
-                    error = PeerUdp.PutPacket(data);
-                    if (error != Error.Ok)
-                        GD.PrintErr($"Error putting packet: {error}");
-                }
+                var error = PeerUdp.SetDestAddress(_currentPeer.PublicIp, port);
+                if (error != Error.Ok)
+                    GD.PrintErr($"Error setting peer UDP destination address: {error}");
+                
+                error = PeerUdp.PutPacket(data);
+                if (error != Error.Ok)
+                    GD.PrintErr($"Error putting packet: {error}");
+            }
 
         if (_messagesSent++ <= RESPONSE_WINDOW) return;
         
@@ -457,10 +442,10 @@ public partial class ENetManager : Node
         // 1 byte for message type
         SendHolePunched,
         
-        // 1 byte for message type and 2 bytes for port = 3
+        // 1 byte for message type and 2 bytes for port
         ReceiveOwnPort,
         
-        // 1 byte for message type, 1 byte for timestamp, 4 bytes for public IP, 4 bytes for private IP and 2 bytes for port
+        // 1 byte for message type, 1 byte for timestamp, 4 bytes for public IP and 2 bytes for port
         ReceivePeerInfo,
         
         // 1 byte for message type, 2 bytes for port
@@ -469,7 +454,14 @@ public partial class ENetManager : Node
         // 1 byte for message type, 2 bytes for port
         Confirm,
         
-        // 1 byte for message type, 2 bytes for ENet port (only when sent by host)
+        // 1 byte for message type
         Go
+    }
+    
+    public class Peer(string publicIp, ushort port, string nickname)
+    {
+        public string PublicIp { get; set; } = publicIp;
+        public ushort Port { get; set; } = port;
+        public string Nickname { get; set; } = nickname;
     }
 }

@@ -5,9 +5,12 @@ namespace UltraPong;
 
 public partial class Clock : Node
 {
-	private ulong _latency, _deltaLatency;
+	// One way latency
+	public ulong Latency;
+	
+	private ulong _deltaLatency;
 	public ulong ClientClock;
-	private readonly List<ulong> _latencyArray = new();
+	private readonly List<ulong> _latencyArray = [];
 
 	public override void _Ready()
 	{
@@ -17,7 +20,7 @@ public partial class Clock : Node
 		RpcId(1, nameof(FetchServerTime), Time.GetTicksUsec());
 		
 		var timer = new Timer();
-		timer.WaitTime = 0.5;
+		timer.WaitTime = 0.5d;
 		timer.Autostart = true;
 		timer.Connect("timeout", new Callable(this, nameof(DetermineLatency)));
 		AddChild(timer);
@@ -38,8 +41,8 @@ public partial class Clock : Node
 	[Rpc(TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
 	private void ReturnServerTime(ulong serverTime, ulong clientTime)
 	{
-		_latency = (Time.GetTicksUsec() - clientTime)/2;
-		ClientClock = serverTime + _latency;
+		Latency = (Time.GetTicksUsec() - clientTime)/2;
+		ClientClock = serverTime + Latency;
 	}
 	
 	//Signaled through Timer
@@ -69,7 +72,7 @@ public partial class Clock : Node
 			else
 				totalLatency += _latencyArray[i];
 		}
-		_deltaLatency = totalLatency/(ulong)_latencyArray.Count - _latency;
-		_latency = totalLatency/(ulong)_latencyArray.Count;
+		_deltaLatency = totalLatency/(ulong)_latencyArray.Count - Latency;
+		Latency = totalLatency/(ulong)_latencyArray.Count;
 	}
 }

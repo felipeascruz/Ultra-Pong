@@ -13,8 +13,8 @@ public partial class PlayersHandler : Node
 		JsonFileAccess.Read<PlayerStats>("res://playerStats.json").MaxRotation;
 	
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
-	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = new();
-	private const byte InterpolationMs = 30;
+	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = [];
+	private const ulong INTERPOLATION_USEC = 10_000;
 	private Node Players => GetNode("../../World/Players");
 
 	public void FetchInputWrapper(string name, State state , Vector2 direction, bool boosting, float rotation)
@@ -109,8 +109,10 @@ public partial class PlayersHandler : Node
 		if (StatesBuffer.Count <= 1) return;
 		
 		StatesBuffer = StatesBuffer.OrderBy(state => state.Key).ToList();
+
+		var clock = GetNode<Clock>("../Clock");
 		
-		var renderTime = GetNode<Clock>("../../Network/Clock").ClientClock - InterpolationMs * 1000;
+		var renderTime = clock.ClientClock - (INTERPOLATION_USEC + clock.Latency);
 		while (StatesBuffer.Count > 2 && renderTime > StatesBuffer[1].Key)
 			StatesBuffer.RemoveAt(0);
 

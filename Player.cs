@@ -51,6 +51,9 @@ public partial class Player : CharacterBody2D
 	public bool IsLocalPlayer => Multiplayer.GetUniqueId() == Id;
 
 	private sbyte _rotationDirection = -1;
+	private float _currentRotation;
+	private float _targetRotation;
+
 	public Vector2 Direction { get; set; } = Vector2.Zero;
 	public bool Boosting { get; set; }
 	public float RotateTo { get; set; }
@@ -91,6 +94,8 @@ public partial class Player : CharacterBody2D
 
 		GetNode<Label>("Nickname").TopLevel = true;
 		
+		_currentRotation = Rotation;
+		
 		SetProcessUnhandledInput(IsLocalPlayer);
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
 		
@@ -105,16 +110,16 @@ public partial class Player : CharacterBody2D
 				MouseMode = MouseModeEnum.Captured;
 
 		var indicatorModel = new Sprite2D
-			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01F, 0.01F) };
+			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01f, 0.01f) };
 		if (Device.Type == 'K')
 		{
 			var rotationIndicator = new Node2D{Name = "Rotation Indicator"};
 			
-			indicatorModel.Position = new Vector2(0F, -Stats.Size.Y/2.5F);
+			indicatorModel.Position = new Vector2(0f, -Stats.Size.Y/2.5f);
 			indicatorModel.Name = "Up";
 			rotationIndicator.AddChild(indicatorModel, true);
 
-			var downIndicator = new Sprite2D{Name = "Down", Position = new Vector2(0F, Stats.Size.Y/2.5F),
+			var downIndicator = new Sprite2D{Name = "Down", Position = new Vector2(0f, Stats.Size.Y/2.5f),
 				Texture = indicatorModel.Texture, Modulate  = indicatorModel.Modulate, Scale = indicatorModel.Scale};
 			rotationIndicator.AddChild(downIndicator, true);
 			
@@ -134,7 +139,7 @@ public partial class Player : CharacterBody2D
 		//Check Overtime
 		if (Overtime > 0)
 		{
-			Scale -= new Vector2(0F, 0.05F * (float)delta);
+			Scale -= new Vector2(0f, 0.05f * (float)delta);
 			Overtime -= delta;
 			SetPhysicsProcess(false);
 		}
@@ -157,7 +162,7 @@ public partial class Player : CharacterBody2D
 		_singleRotationIndicator.GlobalPosition =
 			Position + 
 			GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device) * 
-			Stats.Size.Y/2.5F;
+			Stats.Size.Y/2.5f;
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -187,9 +192,7 @@ public partial class Player : CharacterBody2D
 		Velocity = Direction * _currentSpeed;
 		MoveAndSlide();
 		
-		var maxRotation = Stats.MaxRotation * (float)delta;
-		Rotate(Device.Type == 'K' ? Mathf.Clamp(RotateTo, -maxRotation, maxRotation) : RotateTo);
-		RotateTo = 0F;
+		HandleRotation(delta);
 
 		//Apply impulse to Ball
 		for (sbyte i = 0; i < GetSlideCollisionCount(); i++)
@@ -200,7 +203,7 @@ public partial class Player : CharacterBody2D
 			_ballsfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
 			_ballsfx.Play();
 				
-			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80F, c.GetPosition() - ball.GlobalPosition);
+			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80f, c.GetPosition() - ball.GlobalPosition);
 
 			if (!Multiplayer.IsServer()) 
 				continue;
@@ -224,6 +227,50 @@ public partial class Player : CharacterBody2D
 		}
 	}
 	
+	private void HandleRotation(double delta)
+	{
+		var maxRotationThisFrame = Stats.MaxRotation * (float)delta;
+        
+		if (Device.Type == 'K')
+		{
+			var clampedRotation = Mathf.Clamp(RotateTo, -maxRotationThisFrame, maxRotationThisFrame);
+			var newRotation = _currentRotation + clampedRotation;
+			
+			newRotation = Mathf.Clamp(newRotation, -Stats.MaxRotation, Stats.MaxRotation);
+            
+			var rotationDelta = newRotation - _currentRotation;
+			Rotate(rotationDelta);
+			_currentRotation = newRotation;
+		}
+		else
+		{
+			if (RotateTo != 0f)
+				_targetRotation = Mathf.Clamp(RotateTo, -Stats.MaxRotation, Stats.MaxRotation);
+			
+			var rotationDiff = Mathf.AngleDifference(_currentRotation, _targetRotation);
+			var maxChange = maxRotationThisFrame;
+			var change = Mathf.Clamp(rotationDiff, -maxChange, maxChange);
+            
+			Rotate(change);
+			_currentRotation += change;
+		}
+        
+		// Normalizar a rotação atual para evitar valores muito grandes
+		_currentRotation = NormalizeAngle(_currentRotation);
+		RotateTo = 0f;
+	}
+
+	private float NormalizeAngle(float angle)
+	{
+		while (angle > Mathf.Pi)
+			angle -= 2 * Mathf.Pi;
+		while (angle < -Mathf.Pi)
+			angle += 2 * Mathf.Pi;
+		return angle;
+	}
+
+	
+	
 	public override void _UnhandledInput(InputEvent @event)
 	{
 		if (@event.Device != Device.Number)
@@ -240,7 +287,7 @@ public partial class Player : CharacterBody2D
 			return;
 		}
 
-		var rotation = 0F;
+		var rotation = 0f;
 		switch (@event)
 		{
 			case InputEventMouseMotion mouseMotion when Device.Type == 'K':
@@ -251,11 +298,10 @@ public partial class Player : CharacterBody2D
 			{
 				var to = GetVector(_rotateLeftAction, _rotateRightAction,
 					_rotateUpAction, _rotateDownAction);
-				if (to.Length() >= 1F)
+				if (to.Length() >= 1f)
 				{
-					rotation = Rotation;
-					Rotation = Mathf.Pi / 2 + to.Angle();
-					rotation = Rotation - rotation;
+					var targetAngle = Mathf.Pi / 2 + to.Angle();
+					RotateTo = targetAngle;
 				}
 				break;
 			}

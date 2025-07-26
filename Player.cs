@@ -6,11 +6,38 @@ using Color = Godot.Color;
 
 public partial class Player : CharacterBody2D
 {
+	// Cache nodes for optimization
+	private PlayersHandler _playersHandler;
+	private Label _nicknameNode;
+	private ColorRect _rectangleNode;
+	private Label _timeDisplayNode;
+	private Sprite2D _rotationIndicatorDown;
+	private Sprite2D _rotationIndicatorUp;
+	private Node2D _singleRotationIndicator;
+	private AudioStreamPlayer2D _ballsfx;
+	
+	// Cache strings concatenation
+	private string _moveLeftAction;
+	private string _moveRightAction;
+	private string _moveUpAction;
+	private string _moveDownAction;
+	private string _boostAction;
+	private string _rotateLeftAction;
+	private string _rotateRightAction;
+	private string _rotateUpAction;
+	private string _rotateDownAction;
+	
+	private bool _wasBoosting;
+	private float _currentSpeed = Stats.Speed;
+
+	
 	private static readonly PlayerStats Stats = JsonFileAccess.Read<PlayerStats>("res://playerStats.json");
 	
 	private static readonly float Sensitivity = JsonFileAccess.Read<UserStats>("user://userStats.json").Sensitivity/100F;
-
+	
 	public Device Device;
+	
+	private PlayersHandler.State _cachedState = new();
 	
 	public uint InputStamp { get; set; }
 	public byte Number { get; set; }
@@ -31,6 +58,25 @@ public partial class Player : CharacterBody2D
 	
 	public override void _Ready()
 	{
+		// Cache Nodes
+		_playersHandler = GetNode<PlayersHandler>("../../../Network/PlayersHandler");
+		_nicknameNode = GetNode<Label>("Nickname");
+		_rectangleNode = GetNode<ColorRect>("Rectangle");
+		_timeDisplayNode = GetNode<Label>("../../Time Display");
+		_ballsfx = GetNode<AudioStreamPlayer2D>("../../Ball/SoundFX");
+		
+		// Cache action strings
+		_moveLeftAction = "Move Left" + Device;
+		_moveRightAction = "Move Right" + Device;
+		_moveUpAction = "Move Up" + Device;
+		_moveDownAction = "Move Down" + Device;
+		_boostAction = "Boost" + Device;
+		_rotateLeftAction = "Rotate Left" + Device;
+		_rotateRightAction = "Rotate Right" + Device;
+		_rotateUpAction = "Rotate Up" + Device;
+		_rotateDownAction = "Rotate Down" + Device;
+
+		
 		Name = Id.ToString() + Device;
 		Position = SpawnPoint;
 		
@@ -49,6 +95,10 @@ public partial class Player : CharacterBody2D
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
 		
 		if (!IsLocalPlayer) return;
+		
+		_rotationIndicatorDown = GetNode<Sprite2D>("Rotation Indicator/Down");
+		_rotationIndicatorUp = GetNode<Sprite2D>("Rotation Indicator/Up");
+		_singleRotationIndicator = GetNode<Node2D>("Rotation Indicator");
 		
 		if (DisplayServer.WindowGetMode() is 
 		    DisplayServer.WindowMode.ExclusiveFullscreen or DisplayServer.WindowMode.Fullscreen)
@@ -79,8 +129,7 @@ public partial class Player : CharacterBody2D
 
 	public override void _Process(double delta)
 	{
-		var nickname = GetNode<Label>("Nickname");
-		nickname.Position = new Vector2(-nickname.Size.X/2, nickname.Size.Y/2 - Stats.Size.Y) + Position;
+		_nicknameNode.Position = new Vector2(-_nicknameNode.Size.X/2, _nicknameNode.Size.Y/2 - Stats.Size.Y) + Position;
 
 		//Check Overtime
 		if (Overtime > 0)
@@ -98,14 +147,14 @@ public partial class Player : CharacterBody2D
 		if (Device.Type == 'K')
 		{
 			var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation / 2F)) };
-			GetNode<Sprite2D>("Rotation Indicator/Down").Modulate = color;
+			_rotationIndicatorDown.Modulate = color;
 
 			color.A = Mathf.Abs(Mathf.Sin(Rotation / 2F));
-			GetNode<Sprite2D>("Rotation Indicator/Up").Modulate = color;
+			_rotationIndicatorUp.Modulate = color;
 			return;
 		}
 		
-		GetNode<Sprite2D>("Rotation Indicator").GlobalPosition =
+		_singleRotationIndicator.GlobalPosition =
 			Position + 
 			GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device) * 
 			Stats.Size.Y/2.5F;
@@ -114,26 +163,28 @@ public partial class Player : CharacterBody2D
 	public override void _PhysicsProcess(double delta)
 	{
 		//Check boost
-		var rectangle = GetNode<ColorRect>("Rectangle");
-		float speed;
-		if (Boosting)
+		if (Boosting != _wasBoosting)
 		{
-			rectangle.Color = Colors.Yellow;
-			speed = Stats.Speed * 3;
-			SetCollisionLayerValue(1, false);
-			SetCollisionMaskValue(1, false);
-			SetCollisionMaskValue(2, false);
+			if (Boosting)
+			{
+				_rectangleNode.Color = Colors.Yellow;
+				_currentSpeed = Stats.Speed * 3;
+				SetCollisionLayerValue(1, false);
+				SetCollisionMaskValue(1, false);
+				SetCollisionMaskValue(2, false);
+			}
+			else
+			{
+				_rectangleNode.Color = InitialColor;
+				_currentSpeed = Stats.Speed;
+				SetCollisionLayerValue(1, true);
+				SetCollisionMaskValue(1, true);
+				SetCollisionMaskValue(2, true);
+			}
+			_wasBoosting = Boosting;
 		}
-		else
-		{
-			rectangle.Color = InitialColor;
-			speed = Stats.Speed;
-			SetCollisionLayerValue(1, true);
-			SetCollisionMaskValue(1, true);
-			SetCollisionMaskValue(2, true);
-		}
-		
-		Velocity = Direction * speed;
+
+		Velocity = Direction * _currentSpeed;
 		MoveAndSlide();
 		
 		var maxRotation = Stats.MaxRotation * (float)delta;
@@ -145,10 +196,9 @@ public partial class Player : CharacterBody2D
 		{
 			var c = GetSlideCollision(i);
 			if (c.GetCollider() is not Ball ball) continue;
-
-			var sfx = ball.GetNode<AudioStreamPlayer2D>("SoundFX");
-			sfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
-			sfx.Play();
+			
+			_ballsfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
+			_ballsfx.Play();
 				
 			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80F, c.GetPosition() - ball.GlobalPosition);
 
@@ -157,16 +207,15 @@ public partial class Player : CharacterBody2D
 			var possessionTimer = GetNodeOrNull<PossessionTimer>("../../Possession Timer");
 			if (possessionTimer is null) 
 				continue;
-			var timeDisplay = GetNode<Label>("../../Time Display");
-			switch (timeDisplay.Position.X)
+			switch (_timeDisplayNode.Position.X)
 			{
 				case < 1F when Position.X > 960F:
-					timeDisplay.Position = new Vector2(960F, timeDisplay.Position.Y);
+					_timeDisplayNode.Position = new Vector2(960F, _timeDisplayNode.Position.Y);
 					possessionTimer.Stop();
 					possessionTimer.Start();
 					break;
 				case > 959F when Position.X < 960F:
-					timeDisplay.Position = new Vector2(0F, timeDisplay.Position.Y);
+					_timeDisplayNode.Position = new Vector2(0F, _timeDisplayNode.Position.Y);
 					possessionTimer.Stop();
 					possessionTimer.Start();
 					break;
@@ -180,13 +229,14 @@ public partial class Player : CharacterBody2D
 		if (@event.Device != Device.Number)
 			return;
 		
-		Boosting = IsActionPressed("Boost" + Device);
-		Direction = GetVector("Move Left" + Device, "Move Right" + Device, "Move Up" + Device, "Move Down" + Device);
+		Boosting = IsActionPressed(_boostAction);
+		Direction = GetVector(_moveLeftAction, _moveRightAction, 
+			_moveUpAction, _moveDownAction);
 		
 		if (@event.IsActionPressed("Change Rotation"))
 		{
 			_rotationDirection *= -1;
-			GetNode<Node2D>("Rotation Indicator").RotationDegrees += 180F;
+			_singleRotationIndicator.RotationDegrees += 180F;
 			return;
 		}
 
@@ -199,7 +249,8 @@ public partial class Player : CharacterBody2D
 				break;
 			case InputEventJoypadMotion when Device.Type == 'C':
 			{
-				var to = GetVector("Rotate Left" + Device, "Rotate Right" + Device, "Rotate Up" + Device, "Rotate Down" + Device);
+				var to = GetVector(_rotateLeftAction, _rotateRightAction,
+					_rotateUpAction, _rotateDownAction);
 				if (to.Length() >= 1F)
 				{
 					rotation = Rotation;
@@ -209,14 +260,20 @@ public partial class Player : CharacterBody2D
 				break;
 			}
 		}
-		
-		if (!Multiplayer.IsServer())
-			GetNode<PlayersHandler>("../../../Network/PlayersHandler").FetchInputWrapper
-			(
-				Name,
-				new PlayersHandler.State(Position, Rotation, InputStamp++), 
-				GetVector("Move Left" + Device, "Move Right" + Device, "Move Up" + Device, "Move Down" + Device), 
-				IsActionPressed("Boost" + Device), rotation
-			);
+
+		if (Multiplayer.IsServer()) return;
+			
+		_cachedState.Position = Position;
+		_cachedState.Rotation = Rotation;
+		_cachedState.InputStamp = InputStamp++;
+		_cachedState.Boosting = Boosting;
+
+		_playersHandler.FetchInputWrapper
+		(
+			Name,
+			_cachedState, 
+			Direction,
+			rotation
+		);
 	}
 }

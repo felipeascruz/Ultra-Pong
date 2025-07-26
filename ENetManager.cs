@@ -12,13 +12,15 @@ public partial class ENetManager : Node
     
     [Signal]
     public delegate void RoomRegisteredEventHandler();
+
+    private static Error _error = Error.Ok;
     
     private static readonly ENetMultiplayerPeer ServerENet = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     private static readonly ENetConnection PeerENetConnection = new();
     private static readonly ENetMultiplayerPeer LocalENetPeer = new();
     
-    private const string SERVER_IP = "20.206.244.22";
+    private static readonly string SERVER_IP = System.Environment.GetEnvironmentVariable("SERVER_IP") ?? "127.0.0.1";
     private const ushort SERVER_PORT = 3478;
 
     private bool _isHost;
@@ -47,10 +49,10 @@ public partial class ENetManager : Node
     
     public override void _Ready()
     {
-        var error = LocalENetPeer.CreateMesh(_isHost ? 1 : 2);
-        if (error != Error.Ok)
+        _error = LocalENetPeer.CreateMesh(_isHost ? 1 : 2);
+        if (_error != Error.Ok)
         {
-            GD.PrintErr("Error creating ENet Mesh: " + error);
+            GD.PrintErr("Error creating ENet Mesh: " + _error);
         }
         GetTree().GetMultiplayer().SetMultiplayerPeer(LocalENetPeer);
         _pingPeerTimer.WaitTime = 0.2d;
@@ -69,10 +71,10 @@ public partial class ENetManager : Node
         nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
         
-        var error = ServerENet.CreateClient(SERVER_IP, SERVER_PORT);
-        if (error != Error.Ok)
+        _error = ServerENet.CreateClient(SERVER_IP, SERVER_PORT);
+        if (_error != Error.Ok)
         {
-            GD.PrintErr("Error connecting to server: " + error);
+            GD.PrintErr("Error connecting to server: " + _error);
             return;
         }
         
@@ -85,10 +87,10 @@ public partial class ENetManager : Node
         // Store roomClient string after first byte
         Array.Copy(roomClientBytes, 0, data, 5, roomClientBytes.Length);
         
-        error = ServerENet.PutPacket(data);
-        if (error != Error.Ok)
+        _error = ServerENet.PutPacket(data);
+        if (_error != Error.Ok)
         {
-            GD.PrintErr("Error sending server packet: " + error);
+            GD.PrintErr("Error sending server packet: " + _error);
             return;
         }
         
@@ -102,10 +104,10 @@ public partial class ENetManager : Node
         if (ServerENet.GetConnectionStatus() == MultiplayerPeer.ConnectionStatus.Connected && 
             ServerENet.GetAvailablePacketCount() > 0)
         {
-            var error = ServerENet.GetPacketError();
-            if (error != Error.Ok)
+            _error = ServerENet.GetPacketError();
+            if (_error != Error.Ok)
             {
-                GD.PrintErr("Error receiving server packet: " + error);
+                GD.PrintErr("Error receiving server packet: " + _error);
                 return;
             }
 
@@ -154,10 +156,10 @@ public partial class ENetManager : Node
         // Handle peer messages
         if (PeerUdp.IsBound() && PeerUdp.GetAvailablePacketCount() > 0)
         {
-            var error = PeerUdp.GetPacketError();
-            if (error != Error.Ok)
+            _error = PeerUdp.GetPacketError();
+            if (_error != Error.Ok)
             {
-                GD.PrintErr("Error receiving peer packet: " + error);
+                GD.PrintErr("Error receiving peer packet: " + _error);
                 return;
             }
             
@@ -192,9 +194,9 @@ public partial class ENetManager : Node
 
                         PeerUdp.Close();
 
-                        error = PeerUdp.Bind(_ownPort);
-                        if (error != Error.Ok)
-                            GD.PrintErr($"Error binding on UDP port {_ownPort}: " + error);
+                        _error = PeerUdp.Bind(_ownPort);
+                        if (_error != Error.Ok)
+                            GD.PrintErr($"Error binding on UDP port {_ownPort}: " + _error);
                         else
                             GD.Print("Binding on port " + _ownPort);
                     }
@@ -223,10 +225,10 @@ public partial class ENetManager : Node
         
         ServerENet.Close();
         
-        var error = PeerUdp.Bind(_ownPort);
-        if (error != Error.Ok)
+        _error = PeerUdp.Bind(_ownPort);
+        if (_error != Error.Ok)
         {
-            GD.PrintErr($"Error binding on UDP port {_ownPort}: " + error);
+            GD.PrintErr($"Error binding on UDP port {_ownPort}: " + _error);
             return;
         }
         
@@ -274,13 +276,13 @@ public partial class ENetManager : Node
             
                 Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
                 
-                var error = PeerUdp.SetDestAddress(_currentPeer.PublicIp, port);
-                if (error != Error.Ok)
-                    GD.PrintErr($"Error setting peer UDP destination address: {error}");
+                _error = PeerUdp.SetDestAddress(_currentPeer.PublicIp, port);
+                if (_error != Error.Ok)
+                    GD.PrintErr($"Error setting peer UDP destination address: {_error}");
                 
-                error = PeerUdp.PutPacket(data);
-                if (error != Error.Ok)
-                    GD.PrintErr($"Error putting packet: {error}");
+                _error = PeerUdp.PutPacket(data);
+                if (_error != Error.Ok)
+                    GD.PrintErr($"Error putting packet: {_error}");
             }
 
         if (_messagesSent++ <= RESPONSE_WINDOW) return;
@@ -306,10 +308,10 @@ public partial class ENetManager : Node
             return;
         }
 
-        var error = PeerENetConnection.CreateHostBound("*", _ownPort, 1);
-        if (error != Error.Ok)
+        _error = PeerENetConnection.CreateHostBound("*", _ownPort, 1);
+        if (_error != Error.Ok)
         {
-            GD.PrintErr($"Error creating ENet Host bound on port {_ownPort}: " + error);
+            GD.PrintErr($"Error creating ENet Host bound on port {_ownPort}: " + _error);
             return;
         }
         
@@ -339,7 +341,7 @@ public partial class ENetManager : Node
                     GD.PrintErr("ENet disconnected");
                     return;
                 case ENetConnection.EventType.Error:
-                    GD.PrintErr("ENet error");
+                    GD.PrintErr("ENet _error");
                     break;
                 case ENetConnection.EventType.None:
                 case ENetConnection.EventType.Receive:
@@ -359,15 +361,15 @@ public partial class ENetManager : Node
 
         GD.Print("ENet connection established successfully");
     
-        error = LocalENetPeer.AddMeshPeer(_isHost ? 2 : 1, PeerENetConnection);
-        if (error != Error.Ok)
-            GD.PrintErr("Error adding ENet Mesh peer: " + error);
+        _error = LocalENetPeer.AddMeshPeer(_isHost ? 2 : 1, PeerENetConnection);
+        if (_error != Error.Ok)
+            GD.PrintErr("Error adding ENet Mesh peer: " + _error);
 
         ServerENet.CreateClient(SERVER_IP, SERVER_PORT);
 
-        error = ServerENet.PutPacket([(byte)MessageTypes.SendHolePunched]);
-        if (error != Error.Ok)
-            GD.PrintErr("Error sending hole punched message to server: " + error);
+        _error = ServerENet.PutPacket([(byte)MessageTypes.SendHolePunched]);
+        if (_error != Error.Ok)
+            GD.PrintErr("Error sending hole punched message to server: " + _error);
         else
             GD.Print("Sent hole punched message to server");
     }
@@ -405,7 +407,7 @@ public partial class ENetManager : Node
             uint v => BitConverter.GetBytes(v),
             long v => BitConverter.GetBytes(v),
             ulong v => BitConverter.GetBytes(v),
-            _ => throw new ArgumentException($"Tipo não suportado: {typeof(T)}")
+            _ => throw new ArgumentException($"Not supported type: {typeof(T)}")
         };
 
         if (BitConverter.IsLittleEndian && bytes.Length > 1)

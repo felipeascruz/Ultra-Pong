@@ -2,17 +2,11 @@ using Godot;
 
 namespace UltraPong;
 
-public struct Device
+public struct Device(int number, char type)
 {
-    public Device(int number, char type)
-    {
-        Type = type;
-        Number = number;
-    }
+    public int Number { get; set; } = number;
 
-    public int Number { get; set; }
-    
-    public char Type { get; set; }
+    public char Type { get; set; } = type;
 
     public override string ToString()
     {

@@ -15,9 +15,20 @@ public partial class PlayersHandler : Node
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
 	public List<KeyValuePair<ulong, Dictionary<string, State>>> StatesBuffer { get; private set; } = [];
 	private const ulong INTERPOLATION_USEC = 10_000;
-	private Node Players => GetNode("../../World/Players");
+	private readonly Dictionary<string, Player> _playersCache = new();
+	
+	// Caches nodes to avoid calling GetNode every frame
+	private Node _playersNode;
+	private Clock _clockNode;
+	
 
-	public void FetchInputWrapper(string name, State state , Vector2 direction, bool boosting, float rotation)
+	public override void _Ready()
+	{
+		_playersNode = GetNode("../../World/Players");
+		_clockNode = GetNode<Clock>("../Clock");
+	}
+	
+	public void FetchInputWrapper(string name, State state, Vector2 direction, float rotation)
 	{
 		if (!_localStates.TryAdd(name, new Dictionary<uint, State>{[state.InputStamp] = state}))
 			_localStates[name].Add(state.InputStamp, state);
@@ -25,44 +36,60 @@ public partial class PlayersHandler : Node
 		if (_localStates[name].Count > 10)
 			_localStates[name].Remove(_localStates[name].Keys.Min());
 		
-		RpcId(1, nameof(FetchInput),name, state.InputStamp, direction, boosting, rotation);
+		RpcId(1, nameof(FetchInput),name, state.InputStamp, direction, state.Boosting, rotation);
 	}
 	
+	private Player GetCachedPlayer(string playerName)
+	{
+		// If the player is cached it returns it
+		if (_playersCache.TryGetValue(playerName, out var player) && IsInstanceValid(player)) return player;
+		
+		// If the player is not already cached, it caches it and returns the Node
+		player = _playersNode.GetNode<Player>(playerName);
+		_playersCache[playerName] = player;
+		return player;
+	}
+
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
 	private void FetchInput(string playerName, uint inputStamp, Vector2 direction, bool boosting, float rotation)
 	{
-		var player = Players.GetNode<Player>(playerName);
+	    var player = GetCachedPlayer(playerName); // Use cache
 
-		direction = direction.LimitLength();
-		if (!player.Direction.IsEqualApprox(direction))
-			player.Direction = direction;
+	    direction = direction.LimitLength();
+	    if (!player.Direction.IsEqualApprox(direction))
+	        player.Direction = direction;
 
-		player.Boosting = boosting;
-		player.InputStamp = inputStamp;
-
-		player.RotateTo = rotation;
-		//player.Rotate(player.Device.Type == 'K' ? Mathf.Clamp(rotation, -_maxRotation, _maxRotation) : rotation);
-
+	    player.Boosting = boosting;
+	    player.InputStamp = inputStamp;
+	    player.RotateTo = rotation;
+	    //player.Rotate(player.Device.Type == 'K' ? Mathf.Clamp(rotation, -_maxRotation, _maxRotation) : rotation);
 	}
-	
+		
 	public override void _PhysicsProcess(double delta)
 	{
-		if (!Multiplayer.IsServer()) { RenderRemoteStates(); return; }
-		
-		var serverStates = Players.GetChildren().Cast<Player>().
-			ToDictionary<Player, string, State>(player => player.Name, player => new State(player.Position, player.Rotation, player.InputStamp, player.Boosting));
+	    if (!Multiplayer.IsServer()) 
+	    { 
+	        RenderRemoteStates(); 
+	        return; 
+	    }
+	    
+	    var players = _playersNode.GetChildren().Cast<Player>();
+	    var serverStates = new Dictionary<string, State>();
+	    
+	    foreach (var player in players)
+	        serverStates[player.Name] = new State(player.Position, player.Rotation, player.InputStamp, player.Boosting);
 
-		if (serverStates.Count == 0) return;
-		
-		var states = JsonSerializer.Serialize(serverStates);
-		Rpc(nameof(ReturnPlayersStates),Time.GetTicksUsec(), states);
+	    if (serverStates.Count == 0) return;
+	    
+	    var states = JsonSerializer.Serialize(serverStates);
+	    Rpc(nameof(ReturnPlayersStates), Time.GetTicksUsec(), states);
 	}
 	
 	[Rpc(TransferChannel = 1)]
 	private void ReturnPlayersStates(ulong timestamp, string playersStates)
 	{
 		var states = JsonSerializer.Deserialize<Dictionary<string, State>>(playersStates);
-		foreach (Player player in GetNode("../../World/Players").GetChildren())
+		foreach (Player player in _playersNode.GetChildren())
 			if (player.IsLocalPlayer && states.ContainsKey(player.Name))
 			{
 				var localState = states[player.Name];
@@ -76,7 +103,7 @@ public partial class PlayersHandler : Node
 	
 	private void RenderLocalStates(string name, uint inputStamp, Vector2 position, float rotation)
 	{
-		var player = Players.GetNode<Player>(name);
+		var player = GetCachedPlayer(name);
 
 		try
 		{
@@ -109,10 +136,8 @@ public partial class PlayersHandler : Node
 		if (StatesBuffer.Count <= 1) return;
 		
 		StatesBuffer = StatesBuffer.OrderBy(state => state.Key).ToList();
-
-		var clock = GetNode<Clock>("../Clock");
 		
-		var renderTime = clock.ClientClock - (INTERPOLATION_USEC + clock.Latency);
+		var renderTime = _clockNode.ClientClock - (INTERPOLATION_USEC + _clockNode.Latency);
 		while (StatesBuffer.Count > 2 && renderTime > StatesBuffer[1].Key)
 			StatesBuffer.RemoveAt(0);
 
@@ -126,7 +151,7 @@ public partial class PlayersHandler : Node
 			var latestState = latestStates[player.Key];
 			var nextState = nextStates[player.Key];
 			
-			var playerNode = Players.GetNode<Player>(player.Key);
+			var playerNode = GetCachedPlayer(player.Key);
 			playerNode.GlobalPosition = latestState.Position.Lerp(nextState.Position, interpolationFactor);
 			playerNode.Rotation = Mathf.LerpAngle(latestState.Rotation, nextState.Rotation, interpolationFactor);
 			playerNode.Boosting = nextState.Boosting;
@@ -134,7 +159,7 @@ public partial class PlayersHandler : Node
 	}
 	
 	[JsonConverter(typeof(StateConverter))]
-	public class State
+	public struct State
 	{
 		public Vector2 Position;
 		public float Rotation;

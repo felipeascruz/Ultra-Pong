@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3 uid="uid://b05tdu2sji1j6"]
+
+[ext_resource type="Script" path="res://MainMenu.cs" id="1_k13g0"]
+[ext_resource type="PackedScene" uid="uid://bye1cv3sbmdqv" path="res://Menu Schema.tscn" id="2_n703y"]
+
+[node name="Main Menu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_k13g0")
+
+[node name="Menu Schema" parent="." instance=ExtResource("2_n703y")]
+layout_mode = 1
+
+[node name="Local" type="Button" parent="."]
+layout_mode = 0
+offset_left = 666.0
+offset_top = 552.0
+offset_right = 1231.0
+offset_bottom = 703.0
+focus_neighbor_right = NodePath("../Online")
+focus_neighbor_bottom = NodePath("../Online")
+theme_override_font_sizes/font_size = 30
+text = "Local"
+
+[node name="Online" type="Button" parent="."]
+layout_mode = 0
+offset_left = 662.0
+offset_top = 745.0
+offset_right = 1232.0
+offset_bottom = 886.0
+focus_neighbor_left = NodePath("../Local")
+theme_override_font_sizes/font_size = 30
+text = "Online"
+
+[connection signal="pressed" from="Local" to="." method="OnLocalPressed"]
+[connection signal="pressed" from="Online" to="." method="OnOnlinePressed"]

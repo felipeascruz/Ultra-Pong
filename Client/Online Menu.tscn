@@ -1,0 +1,48 @@
+[gd_scene load_steps=3 format=3 uid="uid://brqdgyfqfpalm"]
+
+[ext_resource type="Script" path="res://OnlineMenu.cs" id="1_buaup"]
+[ext_resource type="PackedScene" uid="uid://bye1cv3sbmdqv" path="res://Menu Schema.tscn" id="2_yn2s4"]
+
+[node name="Online Menu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_buaup")
+
+[node name="Menu Schema" parent="." instance=ExtResource("2_yn2s4")]
+layout_mode = 1
+
+[node name="Room" type="LineEdit" parent="."]
+layout_mode = 0
+offset_left = 662.0
+offset_top = 597.0
+offset_right = 1226.0
+offset_bottom = 714.0
+focus_neighbor_bottom = NodePath("../Create")
+placeholder_text = "Room"
+
+[node name="Create" type="Button" parent="."]
+layout_mode = 0
+offset_left = 667.0
+offset_top = 809.0
+offset_right = 891.0
+offset_bottom = 899.0
+focus_neighbor_top = NodePath("../Room")
+focus_neighbor_right = NodePath("../Join")
+text = "Create"
+
+[node name="Join" type="Button" parent="."]
+layout_mode = 0
+offset_left = 992.0
+offset_top = 816.0
+offset_right = 1216.0
+offset_bottom = 906.0
+focus_neighbor_left = NodePath("../Create")
+focus_neighbor_top = NodePath("../Room")
+text = "Join"
+
+[connection signal="pressed" from="Create" to="." method="SetupRoom" binds= [true]]
+[connection signal="pressed" from="Join" to="." method="SetupRoom" binds= [false]]

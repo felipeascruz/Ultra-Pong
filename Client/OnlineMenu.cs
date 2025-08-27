@@ -56,11 +56,6 @@ public partial class OnlineMenu : Control
 	// Signaled through Create or Join Button
 	private void SetupRoom(bool isHost)
 	{
-		if (NicknameNode.Text.Contains(ENetManager.RESERVED_CHAR))
-			NicknameNode.Text = NicknameNode.Text.Replace(ENetManager.RESERVED_CHAR, '_');
-		if (RoomNode.Text.Contains(ENetManager.RESERVED_CHAR))
-			RoomNode.Text = RoomNode.Text.Replace(ENetManager.RESERVED_CHAR, '_');
-		
 		_eNetManager.SendRegisterMessage(isHost, NicknameNode.Text, RoomNode.Text);
 	}
 

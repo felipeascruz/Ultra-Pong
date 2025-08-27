@@ -10,8 +10,6 @@
 #include <vector>
 #include <stdexcept>
 
-constexpr char RESERVED_CHAR = ':';
-
 // STUNServerException implementation
 STUNServerException::STUNServerException(const std::string& message)
     : std::runtime_error("STUN Server Error: " + message) {}
@@ -72,9 +70,9 @@ void STUNServer::initialize() {
 void STUNServer::handlePeerConnect(ENetPeer* peer) {
     // Rate limit connections (more strict: 3 connections per minute)
     static RateLimiter connectionRateLimiter(
-        std::chrono::minutes(1l),  // 1 minute window
-        3,                        // Max 3 connections
-        std::chrono::minutes(5l)   // Block for 5 minutes
+        std::chrono::minutes(1l),       // 1 minute window
+        5,                                     // Max 5 connections
+        std::chrono::minutes(3l)        // Block for 3 minutes
     );
     
     if (!connectionRateLimiter.isAllowed(peer->address.host)) {
@@ -155,7 +153,7 @@ void STUNServer::handlePeerMessage(ENetPeer* peer, const ENetPacket* packet) {
 
 // Helper function to remove a peer from a specific room
 void STUNServer::removePeerFromRoom(ENetPeer* peer, const std::string& roomName) {
-    auto roomIt = rooms.find(roomName);
+    const auto roomIt = rooms.find(roomName);
     if (roomIt == rooms.end()) {
         std::cerr << "Warning: Attempted to remove peer from non-existent room '" << roomName << "'" << std::endl;
         return;
@@ -198,31 +196,64 @@ void STUNServer::removePeerFromRoom(ENetPeer* peer, const std::string& roomName)
 }
 
 void STUNServer::handleRegisterMessage(ENetPeer* peer, const ENetPacket* packet, const bool isHost) {
-    if (packet->dataLength < 2) {
-        std::cerr << "Invalid register message length" << std::endl;
+    if (packet->dataLength < 4) {
+        std::cerr << "Registration packet too short" << std::endl;
         return;
     }
 
-    // Ensure null termination
-    std::vector<char> buffer(packet->dataLength);
-    std::memcpy(buffer.data(), packet->data + 1, packet->dataLength - 1);
-    buffer[packet->dataLength - 1] = '\0';
-    std::string roomNickname(buffer.data());
+    size_t index = 1; // Skip message type byte
 
-    const size_t separatorPos = roomNickname.find(RESERVED_CHAR);
-    if (separatorPos == std::string::npos) return;
+    // Parse structure: ipsCount, roomLength, nicknameLength, ips..., room, nickname
+    const uint8_t ipsCount = packet->data[index++];
+    const uint8_t roomLength = packet->data[index++];
+    const uint8_t nicknameLength = packet->data[index++];
 
-    const std::string roomName = roomNickname.substr(0, separatorPos);
-    std::string nickname = roomNickname.substr(separatorPos + 1);
-
-    if (nickname.length() > MAX_NICKNAME_LENGTH) {
-        std::cerr << "Nickname too long (" << nickname.length() << " > " << MAX_NICKNAME_LENGTH
-                << "), truncating..." << std::endl;
-        nickname = nickname.substr(0, MAX_NICKNAME_LENGTH);
+    // Validate packet length
+    const size_t expectedLength = 4 + ipsCount * 4 + roomLength + nicknameLength;
+    if (packet->dataLength != expectedLength) {
+        std::cerr << "Invalid registration packet length" << std::endl;
+        return;
     }
 
+    std::vector<std::array<uint8_t, 4>> privateIps;
+    privateIps.reserve(ipsCount);
+    for (uint8_t i = 0; i < ipsCount; ++i) {
+        if (index + 4 > packet->dataLength) {
+            std::cerr << "Not enough data for IP address" << std::endl;
+            return;
+        }
+
+        std::array ip = {
+            packet->data[index++],
+            packet->data[index++],
+            packet->data[index++],
+            packet->data[index++]
+        };
+        privateIps.push_back(ip);
+    }
+
+    // Parse room and nickname with ASCII validation
+    for (size_t i = 0; i < roomLength; ++i) {
+            unsigned char byte = packet->data[index + i];
+            if (byte > 127) {
+                std::cerr << "Invalid ASCII character in room name" << std::endl;
+                return;
+            }
+        }
+    auto roomName = std::string(reinterpret_cast<const char *>(packet->data + index), roomLength);
+    index += roomLength;
+
+    for (size_t i = 0; i < nicknameLength; ++i) {
+            unsigned char byte = packet->data[index + i];
+            if (byte > 127) {
+                std::cerr << "Invalid ASCII character in nickname" << std::endl;
+                return;
+            }
+        }
+    const auto nickname = std::string(reinterpret_cast<const char *>(packet->data + index), nicknameLength);
+
     // Check if this peer is already connected and remove from previous room
-    auto existingPeerIt = peerToRoom.find(peer);
+    const auto existingPeerIt = peerToRoom.find(peer);
     if (existingPeerIt != peerToRoom.end()) {
         const std::string& oldRoomName = existingPeerIt->second;
         std::cout << "Peer reconnecting - removing from previous room '" << oldRoomName << "'" << std::endl;
@@ -251,6 +282,7 @@ void STUNServer::handleRegisterMessage(ENetPeer* peer, const ENetPacket* packet,
     newPeer.nickname = nickname;
     newPeer.isMatched = false;
     newPeer.isHost = isHost;
+    newPeer.privateIps = privateIps;
 
     std::cout << "Peer registered: " << nickname << " in room '" << roomName
               << "' as " << (isHost ? "host" : "client")
@@ -290,7 +322,7 @@ void STUNServer::handleRegisterMessage(ENetPeer* peer, const ENetPacket* packet,
 }
 
 void STUNServer::handleHolePunchedMessage(ENetPeer* peer) {
-    auto peerIt = peerToRoom.find(peer);
+    const auto peerIt = peerToRoom.find(peer);
     if (peerIt == peerToRoom.end()) {
         std::cerr << "Received hole punched message from unknown peer" << std::endl;
         return;
@@ -439,39 +471,45 @@ void STUNServer::tryMatchPeers(const std::string& roomName) {
 
 
 ENetPacket* STUNServer::createPeerInfoPacket(const Peer &to, const Peer &about) {
+    // Calculate packet size: 1 (message type) + 1 (ips length) + 4*N (ips) + 2 (port) + 2 (timestamp)
+    const size_t ipsCount = about.privateIps.size();
+    const size_t packetSize = 1 + 1 + 4 * ipsCount + 2 + 2;
 
-    uint8_t data[9]; // 1 byte for message type, 2 bytes for Timestamp + 4 bytes for Public IP + 2 bytes for Port
-
+    auto data = std::make_unique<uint8_t[]>(packetSize);
     size_t dataIndex = 0;
 
+    // Message type
     data[dataIndex++] = SendPeerInfo;
+
+    // IPs Length
+    data[dataIndex++] = static_cast<uint8_t>(ipsCount);
+
+    // IP addresses (4 bytes each)
+    for (const auto& ip : about.privateIps) {
+        for (size_t i = 0; i < 4; ++i) {
+            data[dataIndex++] = ip[i];
+        }
+    }
+
+    // Port (2 bytes, big endian)
+    const uint16_t port = about.port();
+    getBytesBigEndian(port, data.get() + dataIndex);
+    dataIndex += 2;
 
     // Timestamp (2 bytes, big endian)
     constexpr uint16_t baseWaitMs = 200;
     const uint32_t toLatency = to.latency();
     const uint32_t aboutLatency = about.latency();
-
     const uint32_t maxLatency = std::max(toLatency, aboutLatency);
-
     const uint32_t calculatedWait = baseWaitMs + (3 * maxLatency - toLatency);
-
     constexpr uint32_t maxUint16 = 65535;
     const uint16_t waitTimeMs = static_cast<uint16_t>(std::min(calculatedWait, maxUint16));
 
-    getBytesBigEndian(waitTimeMs, data + dataIndex);
+    getBytesBigEndian(waitTimeMs, data.get() + dataIndex);
     dataIndex += 2;
 
-    // Public IP (4 bytes)
-    const auto publicIp = about.publicIpv4();
-    for (size_t i = 0; i < 4; ++i)
-        data[dataIndex++] = publicIp[i];
-
-    // Port (2 bytes, big endian)
-    const uint16_t port = about.port();
-    getBytesBigEndian(port, data + dataIndex);
-    dataIndex += 2;
-
-    return enet_packet_create(data, dataIndex, ENET_PACKET_FLAG_RELIABLE);
+    // Create packet with the calculated size
+    return enet_packet_create(data.release(), packetSize, ENET_PACKET_FLAG_RELIABLE);
 }
 
 void STUNServer::roomsCleanupCheck() {

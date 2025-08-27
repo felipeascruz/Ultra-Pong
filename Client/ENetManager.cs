@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Godot;
@@ -100,22 +101,43 @@ public partial class ENetManager : Node
 
         _isHost = isHost;
 
-        nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
+        nickname = nickname == "" ? "Player" : nickname;
+        
+        if (room.Length > byte.MaxValue)
+            room = room[..byte.MaxValue];
+        
+        if (nickname.Length > byte.MaxValue)
+            nickname = nickname[..byte.MaxValue];
         
         if (isHost) _ownENetId = 1;
 
-        var ips = IP.GetLocalAddresses().AsSpan();
+        var ips = IP.GetLocalAddresses().ToList();
+        ips.RemoveAll(ip => ip == "127.0.0.1" || ip.StartsWith("169.254."));
+
+        var data = new byte[3 + ips.Count + room.Length + nickname.Length];
+
+        byte dataIndex = 0;
+
+        data[dataIndex++] = isHost ? (byte)MessageType.SendHostRegister : (byte)MessageType.SendClientRegister;
+        
+        data[dataIndex++] = (byte)ips.Count;
+        data[dataIndex++] = (byte)room.Length;
+        data[dataIndex++] = (byte)nickname.Length;
+
         foreach (var ip in ips)
         {
-
+            Array.Copy(Ipv4ToBytes(ip) ?? [], 0, data, dataIndex, 4);
+            dataIndex += 4;
         }
-
-        var data = new byte[3 + ips.Length + room.Length + nickname.Length];
-
-        data[0] = isHost ? (byte)MessageType.SendHostRegister : (byte)MessageType.SendClientRegister;
-
-
+        
+        var roomBytes = Encoding.ASCII.GetBytes(room);
+        Array.Copy(roomBytes, 0, data, dataIndex, room.Length);
+        dataIndex += (byte)room.Length;
+        
+        var nicknameBytes = Encoding.ASCII.GetBytes(nickname);
+        Array.Copy(nicknameBytes, 0, data, dataIndex, nickname.Length);
+        dataIndex += (byte)nickname.Length;
 
         _serverENetPacketPeer.Send(0, data, (int)ENetPacketPeer.FlagReliable);
 
@@ -372,7 +394,7 @@ public partial class ENetManager : Node
                     data[0] = (byte)_punchStep;
                     if (_punchStep == MessageType.Go && _isHost)
                         Array.Copy(_currentPeer.ENetIdBytes, 0, data, 1, 4);
-                    else
+                    else if (_currentPeer.MainPortBytes != null)
                         Array.Copy(_currentPeer.MainPortBytes, 0, data, 1, 2);
 
                     _error = PeerUdp.SetDestAddress(ip, port);
@@ -444,10 +466,9 @@ public partial class ENetManager : Node
             // TODO: implement proper connection waiting
             await Task.Delay(1000);
 
-            // TODO: implement better port mismatch treatment
-
             var ip = _currentPeer.MainIp ?? _currentPeer.Ips[0];
 
+            // TODO: implement better port mismatch treatment
             ushort port;
             if (_currentPeer.MainPortBytes is not null)
                 port = ToUInt16BigEndian(_currentPeer.MainPortBytes, 0);
@@ -652,6 +673,7 @@ private static ushort ToUInt16BigEndian(byte[] data, int startIndex)
             if (ips.Length == 1)
                 MainIp = ips[0];
             ENetIdBytes = GetBytesBigEndian(eNetId);
+            MainPortBytes = GetBytesBigEndian(port);
             
             var portList = new List<ushort>();
             for (var currentPort = (ushort)(port - PORT_CASCADE_RANGE); currentPort <= port + PORT_CASCADE_RANGE; currentPort++)

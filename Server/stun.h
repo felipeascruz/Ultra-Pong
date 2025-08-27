@@ -32,7 +32,8 @@ struct Peer {
     std::string nickname;
     bool isHost;
     bool isMatched; // If it was already or is currently being matched with another peer for hole punching
-    
+    std::vector<std::array<uint8_t, 4>> privateIps;
+
     Peer();
     
     // Property-like getters

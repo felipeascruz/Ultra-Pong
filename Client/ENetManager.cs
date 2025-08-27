@@ -56,13 +56,6 @@ public partial class ENetManager : Node
 
     private Peer? _currentPeer;
 
-    // Char used in packet protocol
-    public const char RESERVED_CHAR = ':';
-
-    private byte[]? _cachedTargetPortBytes;
-    private byte[]? _cachedENetIdBytes;
-    private ushort[]? _cachedPortRange;
-
     public override void _Ready()
     {
         _pingPeerTimer.WaitTime = 0.2d;
@@ -107,22 +100,22 @@ public partial class ENetManager : Node
 
         _isHost = isHost;
 
-        nickname = nickname.Replace(RESERVED_CHAR, '_');
-        room = room.Replace(RESERVED_CHAR, '_');
-
         nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
         
         if (isHost) _ownENetId = 1;
 
-        var roomClientBytes = Encoding.UTF8.GetBytes($"{room}{RESERVED_CHAR}{nickname}");
+        var ips = IP.GetLocalAddresses().AsSpan();
+        foreach (var ip in ips)
+        {
 
-        var data = new byte[1 + roomClientBytes.Length];
+        }
+
+        var data = new byte[3 + ips.Length + room.Length + nickname.Length];
 
         data[0] = isHost ? (byte)MessageType.SendHostRegister : (byte)MessageType.SendClientRegister;
 
-        // Store roomClient string after first byte
-        Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
+
 
         _serverENetPacketPeer.Send(0, data, (int)ENetPacketPeer.FlagReliable);
 
@@ -215,8 +208,13 @@ public partial class ENetManager : Node
     private async Task HandleReceivePeerInfo(byte[] data)
     {
         var startTime = DateTime.Now;
+
+        byte dataIndex = 1; // Starts at 1 because first byte is message type
+
+        var ipsLength = data[1];
+        dataIndex++;
         
-        if (data.Length != 9) // Message type (1) + Timestamp (2) + Public IP (4) + Port (2) = 9
+        if (data.Length != 4 + (4 * ipsLength)) // Message type (1) + Ips Length (1) + Ips (4 X Ips Length) + Port (2) + Timestamp (2)
         {
             GD.PrintErr("Invalid ReceivePeerInfo message length");
             return;
@@ -259,23 +257,23 @@ public partial class ENetManager : Node
         _serverENetPacketPeer = ServerENetConnection.ConnectToHost(SERVER_IP, SERVER_PORT);
         _listenToServerTimer.Start();
 
-        byte offset = 1; // Starts at 1 because first byte is message type
+        var ips = new string[ipsLength];
+        for (byte i = 0; i < ipsLength; i++)
+        {
+            ips[i] = BytesToIpv4(new ArraySegment<byte>(data, dataIndex, 4).ToArray());
+            dataIndex += 4;
+        }
 
-        // SyncTime before starting hole punching
-        var syncTimeMilliSec = ToUInt16BigEndian(data, offset);
-        offset += 2;
-
-        var publicIp = new ArraySegment<byte>(data, offset, 4).ToArray();
-        offset += 4;
-
-        var port = ToUInt16BigEndian(data, offset);
+        var port = ToUInt16BigEndian(data, dataIndex);
+        dataIndex += 2;
 
         var peerENetId = _isHost ? new RandomNumberGenerator().RandiRange(2, int.MaxValue) : 1;
 
-        _currentPeer = new Peer([BytesToIpv4(publicIp)], port, peerENetId);
-        GD.Print("Current Peer: " + _currentPeer.Ips[0] + ':' + _currentPeer.Port);
-        
-        GD.Print($"Caches initialized: {_currentPeer.CachedPortRange.Length} ports, target port bytes, ENet ID bytes");
+        _currentPeer = new Peer(ips, port, peerENetId);
+        GD.Print("Current Peer: " + _currentPeer.MainIp + ':' + port);
+
+        // SyncTime before starting hole punching
+        var syncTimeMilliSec = ToUInt16BigEndian(data, dataIndex);
 
         var elapsedMs = (DateTime.Now - startTime).TotalMilliseconds;
         syncTimeMilliSec = (ushort)Math.Max(0d, syncTimeMilliSec - elapsedMs);
@@ -316,10 +314,13 @@ public partial class ENetManager : Node
                 if (data.Length != 3)
                 {
                     GD.PrintErr($"Invalid {dataType} message length");
-                    break;
+                    return;
                 }
                 if (dataType >= _punchStep)
                     _punchStep = dataType + 1;
+
+                if (_currentPeer?.MainIp is not null)
+                    _currentPeer.MainIp = PeerUdp.GetPacketIP();
 
                 var receivedPort = ToUInt16BigEndian(data, 1);
                 if (_ownPort != receivedPort)
@@ -360,22 +361,19 @@ public partial class ENetManager : Node
     // Signaled through Ping Peer Timer
     private void PingPeer()
     {
-        if (_currentPeer?.Ips == null) return;
+        if (_currentPeer is null) return;
 
         var data = _punchStep == MessageType.Go ? new byte[5] : new byte[3];
         
         for (byte attempt = 0; attempt <= ATTEMPT_RANGE; attempt++)
-            foreach (var ip in _currentPeer.Ips)
-                foreach (var port in _currentPeer.CachedPortRange)
+            foreach (var port in _currentPeer.PortRange)
+                foreach (var ip in _currentPeer.Ips)
                 {
                     data[0] = (byte)_punchStep;
-                    if (_punchStep == MessageType.Go)
-                    {
-                        if (_isHost)
-                            Array.Copy(_currentPeer.ENetIdBytes, 0, data, 1, 4);
-                    }
+                    if (_punchStep == MessageType.Go && _isHost)
+                        Array.Copy(_currentPeer.ENetIdBytes, 0, data, 1, 4);
                     else
-                        Array.Copy(_currentPeer.CachedTargetPortBytes, 0, data, 1, 2);
+                        Array.Copy(_currentPeer.MainPortBytes, 0, data, 1, 2);
 
                     _error = PeerUdp.SetDestAddress(ip, port);
                     if (_error != Error.Ok)
@@ -445,7 +443,18 @@ public partial class ENetManager : Node
         {
             // TODO: implement proper connection waiting
             await Task.Delay(1000);
-            PeerENetConnection.ConnectToHost(_currentPeer.Ips[0], _currentPeer.Port);
+
+            // TODO: implement better port mismatch treatment
+
+            var ip = _currentPeer.MainIp ?? _currentPeer.Ips[0];
+
+            ushort port;
+            if (_currentPeer.MainPortBytes is not null)
+                port = ToUInt16BigEndian(_currentPeer.MainPortBytes, 0);
+            else
+                port = _currentPeer.PortRange[0];
+
+            PeerENetConnection.ConnectToHost(ip, port);
         }
 
         await WaitForENetConnection(3d, PeerENetConnection);
@@ -595,56 +604,53 @@ private static ushort ToUInt16BigEndian(byte[] data, int startIndex)
     
     private enum MessageType : byte
     {
-        // 1 byte for the message type, other bytes for room and client strings
+        // 1 byte for message type, 1 byte for Ips Length, 1 byte for room length, 1 byte for nickname length, 4 X i bytes for private ips and r + n bytes for room and nickname strings
         SendHostRegister,       
         
-        // 1 byte for the message type, other bytes for room and client strings
+        // 1 byte for message type, 1 byte for Ips Length, 1 byte for room length, 1 byte for nickname length, 4 X i bytes for private ips and r + n bytes for room and nickname strings
         SendClientRegister,    
         
-        // 1 byte for the message type
+        // 1 byte for message type
         SendHolePunched,       
         
-        // 1 byte for the message type
+        // 1 byte for message type
         ReceiveRegisterFail,    
         
-        // 1 byte for the message type, 2 bytes for Port
+        // 1 byte for message type, 2 bytes for Port
         ReceiveRegisterSuccess, 
         
-        // 1 byte for the message type, 2 bytes for sync time, 4 bytes for public IP, 2 bytes for port
+        // 1 byte for message type, 2 bytes for sync time, 4 bytes for public IP, 2 bytes for port
         ReceivePeerInfo,   
         
-        // 1 byte for the message type, 2 bytes for port
+        // 1 byte for message type, 2 bytes for port
         Greet,              
         
-        // 1 byte for the message type, 2 bytes for port
+        // 1 byte for message type, 2 bytes for port
         Confirm,        
         
-        // 1 byte for the message type, 4 bytes for ENetId
+        // 1 byte for message type, 4 bytes for ENetId
         Go                      
     }
     
     public class Peer
     {
         public string[] Ips { get; }
-       
-        public ushort Port { get; }
+
+        public string? MainIp { get; set; }
         
         public byte[] ENetIdBytes { get; }
         
         public string? Nickname { get; set; }
         
-        public byte[] CachedTargetPortBytes { get; }
+        public byte[]? MainPortBytes { get; }
         
-        public ushort[] CachedPortRange { get; }
+        public ushort[] PortRange { get; }
         
         public Peer(string[] ips, ushort port, int eNetId)
         {
             Ips = ips;
-            Port = port;
-            ENetIdBytes = GetBytesBigEndian(eNetId);
-            
-            // Initialize caches in constructor
-            CachedTargetPortBytes = GetBytesBigEndian(port);
+            if (ips.Length == 1)
+                MainIp = ips[0];
             ENetIdBytes = GetBytesBigEndian(eNetId);
             
             var portList = new List<ushort>();
@@ -652,7 +658,7 @@ private static ushort ToUInt16BigEndian(byte[] data, int startIndex)
                 if (currentPort >= 1024)
                     portList.Add(currentPort);
                     
-            CachedPortRange = portList.ToArray();
+            PortRange = portList.ToArray();
         }
     }
 }

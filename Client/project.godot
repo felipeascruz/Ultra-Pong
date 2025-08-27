@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Ultra Pong"
-run/main_scene="res://Online Menu.tscn"
+run/main_scene="res://Main Menu.tscn"
 config/features=PackedStringArray("4.3", "C#")
 boot_splash/image="res://Loading Screen.png"
 config/icon="res://icon.png"

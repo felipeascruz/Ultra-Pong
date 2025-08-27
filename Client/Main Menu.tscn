@@ -36,5 +36,5 @@ focus_neighbor_left = NodePath("../Local")
 theme_override_font_sizes/font_size = 30
 text = "Online"
 
-[connection signal="pressed" from="Local" to="." method="OnLocalPressed"]
-[connection signal="pressed" from="Online" to="." method="OnOnlinePressed"]
+[connection signal="pressed" from="Local" to="." method="OnLocalPressed" flags=6]
+[connection signal="pressed" from="Online" to="." method="OnOnlinePressed" flags=6]

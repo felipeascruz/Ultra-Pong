@@ -184,18 +184,25 @@ public partial class WorldHandler : Node
 				break;
 		}
 		
-		//Check overtime
+		
 		var teams = new List<Label>();
 		foreach (var node in score.GetChildren())
 			if (node is Label label)
 				teams.Add(label);
 		
+		// TODO: Better implementation of overtime
+		//Check overtime
+		/*
 		if (int.Parse(teams[0].Text) == 10 && int.Parse(teams[1].Text) == 10)
 		{
+
 			const double overtime = 5D;
-			
-			foreach (Player player in GetNode(World + "Players").GetChildren())
+
+			foreach (var node in GetNode(World + "Players").GetChildren())
+			{
+				var player = (Player)node;
 				player.Overtime = overtime;
+			}
 
 			var overtimeLabel = new Label();
 			overtimeLabel.Text = "OVERTIME";
@@ -203,11 +210,12 @@ public partial class WorldHandler : Node
 			overtimeLabel.VerticalAlignment = VerticalAlignment.Center;
 			overtimeLabel.Size = new Vector2(1920F, 1080F);
 			overtimeLabel.AddThemeFontSizeOverride("font_size", 150);
-			
+
 			GetNode(World).AddChild(overtimeLabel, true);
 			GetTree().CreateTimer(overtime).Connect("timeout", new Callable(this, nameof(QueueFreeOvertimeLabel)));
 			return;
 		}
+		*/
 		
 		if (!Multiplayer.IsServer()) return;
 		

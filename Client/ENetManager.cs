@@ -1,5 +1,5 @@
-#nullable enable
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Godot;
@@ -13,9 +13,9 @@ public partial class ENetManager : Node
     // Server: The STUN/TURN public server
     // Host: The peer that is authoritative over the game state
     // Client: All non-host peers
-    
+
     // TODO: implement private IP tries before hole punching
-    
+
     [Signal]
     public delegate void RoomRegisteredEventHandler();
 
@@ -25,105 +25,78 @@ public partial class ENetManager : Node
     private static readonly ENetConnection ServerENetConnection = new();
     private static readonly PacketPeerUdp PeerUdp = new();
     private static readonly ENetConnection PeerENetConnection = new();
-    private static readonly ENetMultiplayerPeer LocalENetPeer = new();
-    
-    // This bool is not ideal, but the only way I could manage the _Process
-    private bool _isServerConnected;
-    
+    private static ENetMultiplayerPeer? _localENetPeer;
+
     private static readonly string SERVER_IP = "20.206.244.22";
     private const ushort SERVER_PORT = 3478;
 
     private bool _isHost;
-    
-    private ushort _ownPort;
+
+    private ushort? _ownPort;
 
     private int? _ownENetId;
 
-    // Used for sending messages
-    private MessageTypes _punchStep = MessageTypes.Greet;
-    
-    // Used for receiving messages
+
+    private MessageType _punchStep = MessageType.Greet;
+
     private bool _receivedGo;
 
+    // Used for sending messages
     private Timer _pingPeerTimer = new();
 
-    private const byte ATTEMPT_RANGE = 20;
-    private const byte PORT_CASCADE_RANGE = 10;
-    private const byte RESPONSE_WINDOW = 10;
+    // Used for receiving messages
+    private Timer _listenToServerTimer = new();
+
+    private const byte ATTEMPT_RANGE = 30;
+    private const byte PORT_CASCADE_RANGE = 15;
+    private const byte RESPONSE_WINDOW = 20;
 
     // Messages of the same type sent
     private byte _messagesSent;
-    
+
     private Peer? _currentPeer;
 
     // Char used in packet protocol
     public const char RESERVED_CHAR = ':';
-    
+
+    private byte[]? _cachedTargetPortBytes;
+    private byte[]? _cachedENetIdBytes;
+    private ushort[]? _cachedPortRange;
+
     public override void _Ready()
     {
-        if (_isHost) _ownENetId = 1;
-        
         _pingPeerTimer.WaitTime = 0.2d;
-        _pingPeerTimer.Connect("timeout", new Callable(this, nameof(PingPeer)));
-        
+        _pingPeerTimer.Timeout += PingPeer;
         AddChild(_pingPeerTimer);
+
+        _listenToServerTimer.WaitTime = 0.2d;
+        _listenToServerTimer.Timeout += ListenToServer;
+        AddChild(_listenToServerTimer);
+
+        // _Process is only used for handling Peer UDP packets
+        CallDeferred("set_process", false);
     }
-    
-    public async Task ConnectToIceServer()
+
+    public async Task<bool> ConnectToIceServer()
     {
         _error = ServerENetConnection.CreateHostBound("*", 0, 1);
         if (_error != Error.Ok)
-        {
-            GD.PrintErr("Error creating Server ENet Host" + _error);
-            return;
-        }
-        _ownPort = (ushort)ServerENetConnection.GetLocalPort();
-        
+            return false;
+
         _serverENetPacketPeer = ServerENetConnection.ConnectToHost(SERVER_IP, SERVER_PORT);
 
-        var timeout = DateTime.Now.AddSeconds(3);
-        while (DateTime.Now < timeout)
-        {
-            var service = ServerENetConnection.Service(100);
-            if (service == null)
-            {
-                GD.PrintErr("Server ENet service is null");
-                continue;
-            }
-
-            var eventType = (ENetConnection.EventType)(long)service[0];
-            
-            switch (eventType)
-            {
-                case ENetConnection.EventType.Connect:
-                    continue;
-                case ENetConnection.EventType.Disconnect:
-                    GD.PrintErr("Server ENet disconnected");
-                    return;
-                case ENetConnection.EventType.Error:
-                    GD.PrintErr("Server ENet error");
-                    break;
-                case ENetConnection.EventType.None:
-                case ENetConnection.EventType.Receive:
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-            
-            await Task.Delay(50);
-        }
+        await WaitForENetConnection(3d, ServerENetConnection);
 
         if (_serverENetPacketPeer.GetState() != ENetPacketPeer.PeerState.Connected)
-        {
-            GD.PrintErr("No peer connected to ENet");
-            return;
-        }
+            return false;
 
         GD.Print("Server connection established successfully");
+
+        _listenToServerTimer.Start();
         
-        _isServerConnected = true;
+        return true;
     }
-    
+
     public void SendRegisterMessage(bool isHost, string nickname = "", string room = "")
     {
         if (_serverENetPacketPeer is null || _serverENetPacketPeer.GetState() != ENetPacketPeer.PeerState.Connected)
@@ -131,248 +104,296 @@ public partial class ENetManager : Node
             GD.PrintErr("Unable to send registration message. Not connected to server");
             return;
         }
-        
+
         _isHost = isHost;
-        
+
         nickname = nickname.Replace(RESERVED_CHAR, '_');
         room = room.Replace(RESERVED_CHAR, '_');
-        
+
         nickname = nickname == "" ? "Player" : nickname;
         room = room == "" ? $"{nickname}'s room" : room;
         
+        if (isHost) _ownENetId = 1;
+
         var roomClientBytes = Encoding.UTF8.GetBytes($"{room}{RESERVED_CHAR}{nickname}");
-        
+
         var data = new byte[1 + roomClientBytes.Length];
-        
-        data[0] = isHost ? (byte)MessageTypes.SendHostRegister : (byte)MessageTypes.SendClientRegister;
+
+        data[0] = isHost ? (byte)MessageType.SendHostRegister : (byte)MessageType.SendClientRegister;
 
         // Store roomClient string after first byte
         Array.Copy(roomClientBytes, 0, data, 1, roomClientBytes.Length);
-        
+
         _serverENetPacketPeer.Send(0, data, (int)ENetPacketPeer.FlagReliable);
-        
+
         GD.Print("Registration packet sent to server");
+        if (isHost)
+            EmitSignal(nameof(RoomRegistered));
     }
-    
-    //Process is only used for listening
-    public override void _Process(double delta)
+
+    // Signaled through ListenToServerTimer
+    private void ListenToServer()
     {
-        //HandleServerMessages
-        if (_isServerConnected)
+        var service = ServerENetConnection.Service();
+        if (service == null)
         {
-            var service = ServerENetConnection.Service(100);
-            if (service == null)
-            {
-                GD.PrintErr("ENet service is null");
+            GD.PrintErr("ENet service is null");
+            return;
+        }
+
+        var eventType = (ENetConnection.EventType)(long)service[0];
+
+        switch (eventType)
+        {
+            case ENetConnection.EventType.Connect:
+                break;
+            case ENetConnection.EventType.Disconnect:
+                GD.PrintErr("Server ENet disconnected");
                 return;
-            }
+            case ENetConnection.EventType.Error:
+                GD.PrintErr("Server ENet error");
+                break;
+            case ENetConnection.EventType.None:
+                break;
+            case ENetConnection.EventType.Receive:
+                var peer = (ENetPacketPeer)service[1];
 
-            var eventType = (ENetConnection.EventType)(long)service[0];
-
-            switch (eventType)
-            {
-                case ENetConnection.EventType.Connect:
-                    break;
-                case ENetConnection.EventType.Disconnect:
-                    GD.PrintErr("Server ENet disconnected");
+                _error = peer.GetPacketError();
+                if (_error != Error.Ok)
+                {
+                    GD.PrintErr("Error receiving server packet: " + _error);
                     return;
-                case ENetConnection.EventType.Error:
-                    GD.PrintErr("Server ENet error");
-                    break;
-                case ENetConnection.EventType.None:
-                    break;
-                case ENetConnection.EventType.Receive:
-                    var peer = (ENetPacketPeer)service[1];
+                }
 
-                    _error = peer.GetPacketError();
-                    if (_error != Error.Ok)
+                HandleServerMessage(peer.GetPacket());
+
+                break;
+            default:
+                GD.Print("Unknown ENet event type: " + eventType);
+                break;
+        }
+
+        return;
+
+        void HandleServerMessage(byte[] data)
+        {
+            var dataType = (MessageType)data[0];
+            switch (dataType)
+            {
+                case MessageType.ReceiveRegisterFail:
+                    GD.Print("Server register failed");
+                    break;
+                case MessageType.ReceiveRegisterSuccess:
+                    if (data.Length != 3)
                     {
-                        GD.PrintErr("Error receiving server packet: " + _error);
+                        GD.PrintErr("Invalid ReceiveRegisterSuccess message length: " + data.Length);
                         return;
                     }
 
-                    _ = HandleReceivePeerInfo(peer.GetPacket());
+                    GD.Print("Server register succeeded");
+
+                    _ownPort = ToUInt16BigEndian(data, 1);
+                    break;
+                case MessageType.ReceivePeerInfo:
+                    _ = HandleReceivePeerInfo(data);
+                    break;
+                case MessageType.SendHostRegister:
+                case MessageType.SendClientRegister:
+                case MessageType.SendHolePunched:
+                case MessageType.Greet:
+                case MessageType.Confirm:
+                case MessageType.Go:
+                    GD.Print("Invalid server message type: " + dataType);
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException();
-            }
-
-            // Handle peer messages
-            if (PeerUdp.IsBound() && PeerUdp.GetAvailablePacketCount() > 0)
-            {
-                _error = PeerUdp.GetPacketError();
-                if (_error != Error.Ok)
-                {
-                    GD.PrintErr("Error receiving peer packet: " + _error);
-                    return;
-                }
-
-                var data = PeerUdp.GetPacket();
-                if (data.Length == 0)
-                {
-                    GD.PrintErr("Received empty packet");
-                    return;
-                }
-
-                var dataType = (MessageTypes)data[0];
-                switch (dataType)
-                {
-                    case MessageTypes.Greet or MessageTypes.Confirm:
-                        _messagesSent = 0;
-
-                        if (data.Length != 3)
-                        {
-                            GD.PrintErr($"Invalid {dataType} message length");
-                            break;
-                        }
-
-                        _punchStep = dataType + 1;
-
-                        var receivedPort = ToUInt16BigEndian(data, 1);
-                        if (_ownPort != receivedPort)
-                        {
-                            // TODO: Implement better port mismatch treatment
-                            GD.Print($"Port mismatch on {dataType}: own={_ownPort}, received={receivedPort}");
-
-                            _ownPort = receivedPort;
-
-                            PeerUdp.Close();
-
-                            _error = PeerUdp.Bind(_ownPort);
-                            if (_error != Error.Ok)
-                                GD.PrintErr($"Error binding on UDP port {_ownPort}: " + _error);
-                            else
-                                GD.Print("Binding on port " + _ownPort);
-                        }
-
-                        break;
-                    case MessageTypes.Go:
-                        if (_receivedGo) return;
-                        
-                        if (!_isHost)
-                            _ownENetId = ToInt32BigEndian(data, 1);
-                        
-                        GD.Print("Received Go, hole punching complete");
-                        
-                        _receivedGo = true;
-                        _punchStep = MessageTypes.Go;
-
-                        _ = ConnectENetPeer();
-                        break;
-                    default:
-                        GD.PrintErr("Unknown peer message type: " + dataType);
-                        break;
-                }
+                    GD.Print("Unknown server message type: " + dataType);
+                    break;
             }
         }
     }
 
     private async Task HandleReceivePeerInfo(byte[] data)
     {
-        if (data.Length != 8) // Timestamp (2) + Public IP (4) + Port (2) = 8
+        var startTime = DateTime.Now;
+        
+        if (data.Length != 9) // Message type (1) + Timestamp (2) + Public IP (4) + Port (2) = 9
         {
             GD.PrintErr("Invalid ReceivePeerInfo message length");
             return;
         }
 
         GD.Print("Received peer info at " + DateTime.Now.ToString("HH:mm:ss.fff"));
-        
-        _isServerConnected = false;
+
+        _listenToServerTimer.Stop();
         _serverENetPacketPeer?.Reset();
-        
-        _punchStep = MessageTypes.Greet;
+        ServerENetConnection.Destroy();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        _punchStep = MessageType.Greet;
         _messagesSent = 0;
-        
-        _error = PeerUdp.Bind(_ownPort);
-        if (_error != Error.Ok)
+
+        if (_ownPort is null)
         {
-            GD.PrintErr($"Error binding on UDP port {PeerUdp.GetLocalPort()}: " + _error);
+            GD.PrintErr("Invalid own port");
             return;
         }
-        GD.Print("Binding on UDP port " + PeerUdp.GetLocalPort());
-        
+
+        _error = PeerUdp.Bind((ushort)_ownPort);
+        if (_error != Error.Ok)
+        {
+            GD.PrintErr($"Error binding on UDP port {_ownPort}: " + _error);
+            return;
+        }
+
+        GD.Print("Binding on UDP port " + _ownPort);
+
         _error = ServerENetConnection.CreateHostBound("*", 0, 1);
         if (_error != Error.Ok)
         {
             GD.PrintErr("Error creating Server ENet Host" + _error);
             return;
         }
-        
+
         _serverENetPacketPeer = ServerENetConnection.ConnectToHost(SERVER_IP, SERVER_PORT);
-        _isServerConnected = true;
-        
-        byte offset = 1;
-        
-        // Timestamp to start hole punching
-        var timestampMilliSec = ToUInt16BigEndian(data, offset);
+        _listenToServerTimer.Start();
+
+        byte offset = 1; // Starts at 1 because first byte is message type
+
+        // SyncTime before starting hole punching
+        var syncTimeMilliSec = ToUInt16BigEndian(data, offset);
         offset += 2;
-        
+
         var publicIp = new ArraySegment<byte>(data, offset, 4).ToArray();
         offset += 4;
-                    
+
         var port = ToUInt16BigEndian(data, offset);
 
-        var eNetId = _isHost ? new RandomNumberGenerator().RandiRange(2, int.MaxValue) : 1;
+        var peerENetId = _isHost ? new RandomNumberGenerator().RandiRange(2, int.MaxValue) : 1;
 
-        _currentPeer = new Peer(BytesToIpv4(publicIp),  port, eNetId);
-        GD.Print("Current Peer: " + _currentPeer.PublicIp + ':' + _currentPeer.Port);
+        _currentPeer = new Peer([BytesToIpv4(publicIp)], port, peerENetId);
+        GD.Print("Current Peer: " + _currentPeer.Ips[0] + ':' + _currentPeer.Port);
         
-        
+        GD.Print($"Caches initialized: {_currentPeer.CachedPortRange.Length} ports, target port bytes, ENet ID bytes");
+
+        var elapsedMs = (DateTime.Now - startTime).TotalMilliseconds;
+        syncTimeMilliSec = (ushort)Math.Max(0d, syncTimeMilliSec - elapsedMs);
+
         // Wait for timestamp synchronization
-        await Task.Delay(timestampMilliSec);
+        await Task.Delay(syncTimeMilliSec);
+
+        _pingPeerTimer.Start();
+        SetProcess(true);
         
         GD.Print("Starting hole punching at " + DateTime.Now.ToString("HH:mm:ss.fff"));
-        
-        _pingPeerTimer.Start();
+        GD.Print("Sync Time in ms: " + syncTimeMilliSec);
     }
-    
+
+    // _Process is used exclusively for handling Peer UDP packets
+    public override void _Process(double delta)
+    {
+        if (!PeerUdp.IsBound() || PeerUdp.GetAvailablePacketCount() <= 0) return;
+
+        _error = PeerUdp.GetPacketError();
+        if (_error != Error.Ok)
+        {
+            GD.PrintErr("Error receiving peer packet: " + _error);
+            return;
+        }
+
+        var data = PeerUdp.GetPacket();
+        
+        if (data.Length == 0 || PeerUdp.GetPacketIP() == SERVER_IP)
+            return;
+
+        var dataType = (MessageType)data[0];
+        switch (dataType)
+        {
+            case MessageType.Greet or MessageType.Confirm:
+                _messagesSent = 0;
+
+                if (data.Length != 3)
+                {
+                    GD.PrintErr($"Invalid {dataType} message length");
+                    break;
+                }
+                if (dataType >= _punchStep)
+                    _punchStep = dataType + 1;
+
+                var receivedPort = ToUInt16BigEndian(data, 1);
+                if (_ownPort != receivedPort)
+                {
+                    // TODO: Implement better port mismatch treatment
+                    GD.Print($"Port mismatch on {dataType}: own={_ownPort}, received={receivedPort}");
+
+                    _ownPort = receivedPort;
+
+                    PeerUdp.Close();
+
+                    _error = PeerUdp.Bind((ushort)_ownPort);
+                    if (_error != Error.Ok)
+                        GD.PrintErr($"Error binding on UDP port {_ownPort}: " + _error);
+                    else
+                        GD.Print("Binding on port " + _ownPort);
+                }
+                break;
+            case MessageType.Go:
+                if (_receivedGo) return;
+
+                if (!_isHost)
+                    _ownENetId = ToInt32BigEndian(data, 1);
+
+                GD.Print("Received Go, hole punching complete");
+
+                _receivedGo = true;
+                _punchStep = MessageType.Go;
+
+                _ = ConnectENetPeer();
+                break;
+            default:
+                GD.PrintErr("Unknown peer message type: " + dataType);
+                break;
+        }
+    }
+
     // Signaled through Ping Peer Timer
     private void PingPeer()
     {
-        if (_currentPeer == null) return;
-        
-        var data = new byte[3];
-        data[0] = (byte)_punchStep;
+        if (_currentPeer?.Ips == null) return;
 
-        var targetPort = _currentPeer.Port;
+        var data = _punchStep == MessageType.Go ? new byte[5] : new byte[3];
         
         for (byte attempt = 0; attempt <= ATTEMPT_RANGE; attempt++)
-        {
-            if (_punchStep == MessageTypes.Go)
-            {
-                if (_isHost)
-                    Array.Copy(GetBytesBigEndian(_currentPeer.ENetId), 0, data, 1, 4);
-                
-                _error = PeerUdp.PutPacket(data);
-                if (_error != Error.Ok)
-                    GD.PrintErr($"Error putting Go packet: {_error}");
-            }
-            else 
-                for (var port = (ushort)(targetPort - PORT_CASCADE_RANGE); port <= targetPort + PORT_CASCADE_RANGE; port++)
+            foreach (var ip in _currentPeer.Ips)
+                foreach (var port in _currentPeer.CachedPortRange)
                 {
-                    if (port < 1024) continue;
-                
-                    Array.Copy(GetBytesBigEndian(targetPort), 0, data, 1, 2);
-                    
-                    _error = PeerUdp.SetDestAddress(_currentPeer.PublicIp, port);
-                    if (_error != Error.Ok)
-                        GD.PrintErr($"Error setting peer UDP destination address: {_error}");
-                    
-                    _error = PeerUdp.PutPacket(data);
-                    if (_error != Error.Ok)
-                        GD.PrintErr($"Error putting packet: {_error}");
-                }
-        }
-            
+                    data[0] = (byte)_punchStep;
+                    if (_punchStep == MessageType.Go)
+                    {
+                        if (_isHost)
+                            Array.Copy(_currentPeer.ENetIdBytes, 0, data, 1, 4);
+                    }
+                    else
+                        Array.Copy(_currentPeer.CachedTargetPortBytes, 0, data, 1, 2);
 
-        if (_messagesSent++ <= RESPONSE_WINDOW) return;
-        
+                    _error = PeerUdp.SetDestAddress(ip, port);
+                    if (_error != Error.Ok)
+                        continue;
+                    PeerUdp.PutPacket(data);
+                }
+
+
+        if (_messagesSent++ <= RESPONSE_WINDOW)
+            return;
+
         _pingPeerTimer.Stop();
 
         GD.Print(_receivedGo
             ? "Received go and sent back, stopping ping"
             : $"Not received {_punchStep} from peer. Stopping ping.");
     }
+
 
     private async Task ConnectENetPeer()
     {
@@ -381,84 +402,64 @@ public partial class ENetManager : Node
             await Task.Delay((int)(_pingPeerTimer.WaitTime * 1000));
 
         PeerUdp.Close();
+        // _Process is only used for receiving packets from the peer
+        CallDeferred("set_process", false);
 
-        if (LocalENetPeer.Host is null)
+        if (_localENetPeer is null)
         {
-            if (_ownENetId == null)
+            if (_ownENetId is null)
             {
                 GD.PrintErr("Own ENet ID is null");
                 return;
             }
-            
-            _error = LocalENetPeer.CreateMesh((int)_ownENetId);
+
+            _localENetPeer = new ENetMultiplayerPeer();
+            _error = _localENetPeer.CreateMesh((int)_ownENetId);
 
             if (_error != Error.Ok)
                 GD.PrintErr("Error creating ENet Mesh: " + _error);
 
-            GetTree().GetMultiplayer().SetMultiplayerPeer(LocalENetPeer);
+            GetTree().GetMultiplayer().SetMultiplayerPeer(_localENetPeer);
         }
 
-        if (_currentPeer == null)
+        if (_currentPeer is null)
         {
             GD.PrintErr("Null current peer");
             return;
         }
 
-        _error = PeerENetConnection.CreateHostBound("*", _ownPort, 1);
+        if (_ownPort is null)
+        {
+            GD.PrintErr("Invalid own port");
+            return;
+        }
+
+        _error = PeerENetConnection.CreateHostBound("*", (ushort)_ownPort, 1);
         if (_error != Error.Ok)
         {
             GD.PrintErr($"Error creating ENet Host bound on port {_ownPort}: " + _error);
             return;
         }
-        
+
         if (!_isHost)
         {
             // TODO: implement proper connection waiting
             await Task.Delay(1000);
-            PeerENetConnection.ConnectToHost(_currentPeer.PublicIp, _currentPeer.Port);
+            PeerENetConnection.ConnectToHost(_currentPeer.Ips[0], _currentPeer.Port);
         }
 
-        var timeout = DateTime.Now.AddSeconds(3);
-        while (DateTime.Now < timeout)
-        {
-            var service = PeerENetConnection.Service(100);
-            if (service == null)
-            {
-                GD.PrintErr("ENet service is null");
-                continue;
-            }
+        await WaitForENetConnection(3d, PeerENetConnection);
 
-            var eventType = (ENetConnection.EventType)(long)service[0];
-            
-            switch (eventType)
-            {
-                case ENetConnection.EventType.Connect:
-                    continue;
-                case ENetConnection.EventType.Disconnect:
-                    GD.PrintErr("ENet peer disconnected");
-                    return;
-                case ENetConnection.EventType.Error:
-                    GD.PrintErr("ENet peer Error");
-                    break;
-                case ENetConnection.EventType.None:
-                case ENetConnection.EventType.Receive:
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-            
-            await Task.Delay(50);
-        }
-
-        if (PeerENetConnection.GetPeers().Count == 0 || PeerENetConnection.GetPeers()[0].GetState() != ENetPacketPeer.PeerState.Connected)
+        if (PeerENetConnection.GetPeers().Count == 0 ||
+            PeerENetConnection.GetPeers()[0].GetState() != ENetPacketPeer.PeerState.Connected)
         {
             GD.PrintErr("No peer connected to ENet");
             return;
         }
 
         GD.Print("ENet connection to peer established successfully");
-        
-        _error = LocalENetPeer.AddMeshPeer(_currentPeer.ENetId, PeerENetConnection);
+
+        _error = _localENetPeer.AddMeshPeer(ToInt32BigEndian(_currentPeer.ENetIdBytes, 0), PeerENetConnection);
         if (_error != Error.Ok)
             GD.PrintErr("Error adding ENet Mesh peer: " + _error);
 
@@ -468,9 +469,9 @@ public partial class ENetManager : Node
             return;
         }
 
-        _error = _serverENetPacketPeer.Send(0, [(byte)MessageTypes.SendHolePunched],
-                (int)ENetPacketPeer.FlagReliable);
-        
+        _error = _serverENetPacketPeer.Send(0, [(byte)MessageType.SendHolePunched],
+            (int)ENetPacketPeer.FlagReliable);
+
         if (_error != Error.Ok)
             GD.PrintErr("Error sending hole punched message to server: " + _error);
         else
@@ -479,15 +480,54 @@ public partial class ENetManager : Node
 
     public override void _ExitTree()
     {
-        LocalENetPeer.Close();
+        _serverENetPacketPeer?.PeerDisconnect();
+        _localENetPeer?.Close();
         PeerUdp.Close();
         _pingPeerTimer.Stop();
     }
 
-    private static ushort ToUInt16BigEndian(byte[] data, int startIndex)
+    private static async Task WaitForENetConnection(double timeoutSecs, ENetConnection eNetConnection)
+    {
+        var timeout = DateTime.Now.AddSeconds(timeoutSecs);
+        while (DateTime.Now < timeout)
+        {
+            var service = eNetConnection.Service();
+            if (service == null)
+            {
+                GD.PrintErr("ENet service is null");
+                break;
+            }
+
+            var eventType = (ENetConnection.EventType)(long)service[0];
+
+            switch (eventType)
+            {
+                case ENetConnection.EventType.Connect:
+                    break;
+                case ENetConnection.EventType.Disconnect:
+                    GD.PrintErr("ENet disconnected");
+                    return;
+                case ENetConnection.EventType.Error:
+                    GD.PrintErr("ENet error");
+                    break;
+                case ENetConnection.EventType.None:
+                case ENetConnection.EventType.Receive:
+                    break;
+                default:
+                    GD.PrintErr("Unknown ENet event type: " + eventType);
+                    break;
+            }
+
+            if (eventType == ENetConnection.EventType.Connect) break;
+
+            await Task.Delay(50);
+        }
+    }
+
+private static ushort ToUInt16BigEndian(byte[] data, int startIndex)
     {
         if (startIndex + 2 > data.Length)
-            throw new ArgumentOutOfRangeException(nameof(startIndex), "Not enough bytes to read UInt16");
+            GD.PrintErr("Not enough bytes to read UInt16");
 
         if (!BitConverter.IsLittleEndian) 
             return BitConverter.ToUInt16(data, startIndex);
@@ -501,7 +541,7 @@ public partial class ENetManager : Node
     private static int ToInt32BigEndian(byte[] data, int startIndex)
     {
         if (startIndex + 4 > data.Length)
-            throw new ArgumentOutOfRangeException(nameof(startIndex), "Not enough bytes to read Int32");
+            GD.PrintErr("Not enough bytes to read Int32");
 
         if (!BitConverter.IsLittleEndian) 
             return BitConverter.ToInt32(data, startIndex);
@@ -553,23 +593,66 @@ public partial class ENetManager : Node
         return $"{ip[0]}.{ip[1]}.{ip[2]}.{ip[3]}";
     }
     
-    private enum MessageTypes : byte
+    private enum MessageType : byte
     {
-        ReceivePeerInfo,    // 1 byte for the message type, 4 bytes for public IP, 2 bytes for port
-        SendHostRegister,   // 1 byte for the message type, other bytes for room and client strings
-        SendClientRegister, // 1 byte for the message type, other bytes for room and client strings
-        SendHolePunched,    // 1 byte for the message type
-        Greet,              // 1 byte for the message type, 2 bytes for port
-        Confirm,            // 1 byte for the message type, 2 bytes for port
-        Go                  // 1 byte for the message type, 4 bytes for ENetId
+        // 1 byte for the message type, other bytes for room and client strings
+        SendHostRegister,       
+        
+        // 1 byte for the message type, other bytes for room and client strings
+        SendClientRegister,    
+        
+        // 1 byte for the message type
+        SendHolePunched,       
+        
+        // 1 byte for the message type
+        ReceiveRegisterFail,    
+        
+        // 1 byte for the message type, 2 bytes for Port
+        ReceiveRegisterSuccess, 
+        
+        // 1 byte for the message type, 2 bytes for sync time, 4 bytes for public IP, 2 bytes for port
+        ReceivePeerInfo,   
+        
+        // 1 byte for the message type, 2 bytes for port
+        Greet,              
+        
+        // 1 byte for the message type, 2 bytes for port
+        Confirm,        
+        
+        // 1 byte for the message type, 4 bytes for ENetId
+        Go                      
     }
     
-    public class Peer(string publicIp, ushort port, int eNetId)
+    public class Peer
     {
-        public string PublicIp { get;} = publicIp;
-        public ushort Port { get;} = port;
-        public int ENetId { get;} = eNetId;
+        public string[] Ips { get; }
+       
+        public ushort Port { get; }
+        
+        public byte[] ENetIdBytes { get; }
         
         public string? Nickname { get; set; }
+        
+        public byte[] CachedTargetPortBytes { get; }
+        
+        public ushort[] CachedPortRange { get; }
+        
+        public Peer(string[] ips, ushort port, int eNetId)
+        {
+            Ips = ips;
+            Port = port;
+            ENetIdBytes = GetBytesBigEndian(eNetId);
+            
+            // Initialize caches in constructor
+            CachedTargetPortBytes = GetBytesBigEndian(port);
+            ENetIdBytes = GetBytesBigEndian(eNetId);
+            
+            var portList = new List<ushort>();
+            for (var currentPort = (ushort)(port - PORT_CASCADE_RANGE); currentPort <= port + PORT_CASCADE_RANGE; currentPort++)
+                if (currentPort >= 1024)
+                    portList.Add(currentPort);
+                    
+            CachedPortRange = portList.ToArray();
+        }
     }
 }

@@ -15,8 +15,6 @@ public partial class ENetManager : Node
     // Host: The peer that is authoritative over the game state
     // Client: All non-host peers
 
-    // TODO: implement private IP tries before hole punching
-
     [Signal]
     public delegate void RoomRegisteredEventHandler();
 
@@ -100,9 +98,9 @@ public partial class ENetManager : Node
         }
 
         _isHost = isHost;
-
-        room = room == "" ? $"{nickname}'s room" : room;
+        
         nickname = nickname == "" ? "Player" : nickname;
+        room = room == "" ? $"{nickname}'s room" : room;
         
         if (room.Length > byte.MaxValue)
             room = room[..byte.MaxValue];
@@ -113,9 +111,10 @@ public partial class ENetManager : Node
         if (isHost) _ownENetId = 1;
 
         var ips = IP.GetLocalAddresses().ToList();
-        ips.RemoveAll(ip => ip == "127.0.0.1" || ip.StartsWith("169.254."));
+        ips.RemoveAll(ip => ip == "127.0.0.1" || ip.StartsWith("169.254.") || ip.Contains(':'));
 
-        var data = new byte[3 + ips.Count + room.Length + nickname.Length];
+        var dataLength = 4 + 4 * ips.Count + room.Length + nickname.Length;
+        var data = new byte[dataLength];
 
         byte dataIndex = 0;
 
@@ -236,7 +235,7 @@ public partial class ENetManager : Node
         var ipsLength = data[1];
         dataIndex++;
         
-        if (data.Length != 4 + (4 * ipsLength)) // Message type (1) + Ips Length (1) + Ips (4 X Ips Length) + Port (2) + Timestamp (2)
+        if (data.Length != 1 + 1 + 4 * ipsLength + 4) // Message type (1) + Ips Length (1) + Ips (4 X Ips Length) + Port (2) + Timestamp (2)
         {
             GD.PrintErr("Invalid ReceivePeerInfo message length");
             return;
@@ -307,7 +306,7 @@ public partial class ENetManager : Node
         SetProcess(true);
         
         GD.Print("Starting hole punching at " + DateTime.Now.ToString("HH:mm:ss.fff"));
-        GD.Print("Sync Time in ms: " + syncTimeMilliSec);
+        GD.Print("Sync Time: " + syncTimeMilliSec + " ms");
     }
 
     // _Process is used exclusively for handling Peer UDP packets
@@ -402,8 +401,7 @@ public partial class ENetManager : Node
                         continue;
                     PeerUdp.PutPacket(data);
                 }
-
-
+        
         if (_messagesSent++ <= RESPONSE_WINDOW)
             return;
 
@@ -454,6 +452,8 @@ public partial class ENetManager : Node
             return;
         }
 
+        await Task.Delay(100);
+        
         _error = PeerENetConnection.CreateHostBound("*", (ushort)_ownPort, 1);
         if (_error != Error.Ok)
         {
@@ -475,13 +475,15 @@ public partial class ENetManager : Node
             else
                 port = _currentPeer.PortRange[0];
 
-            PeerENetConnection.ConnectToHost(ip, port);
+            GD.Print($"Connecting to ENet {ip}:{port}");
+            var connection = PeerENetConnection.ConnectToHost(ip, port);
+            if (connection is null)
+                GD.PrintErr("Error connecting to ENet");
         }
 
-        await WaitForENetConnection(3d, PeerENetConnection);
+        bool connected = await WaitForENetConnection(3d, PeerENetConnection);
 
-        if (PeerENetConnection.GetPeers().Count == 0 ||
-            PeerENetConnection.GetPeers()[0].GetState() != ENetPacketPeer.PeerState.Connected)
+        if (!connected)
         {
             GD.PrintErr("No peer connected to ENet");
             return;
@@ -510,13 +512,14 @@ public partial class ENetManager : Node
 
     public override void _ExitTree()
     {
+        ServerENetConnection.Destroy();
         _serverENetPacketPeer?.PeerDisconnect();
         _localENetPeer?.Close();
         PeerUdp.Close();
         _pingPeerTimer.Stop();
     }
 
-    private static async Task WaitForENetConnection(double timeoutSecs, ENetConnection eNetConnection)
+    private static async Task<bool> WaitForENetConnection(double timeoutSecs, ENetConnection eNetConnection)
     {
         var timeout = DateTime.Now.AddSeconds(timeoutSecs);
         while (DateTime.Now < timeout)
@@ -533,13 +536,13 @@ public partial class ENetManager : Node
             switch (eventType)
             {
                 case ENetConnection.EventType.Connect:
-                    break;
+                    return true;
                 case ENetConnection.EventType.Disconnect:
                     GD.PrintErr("ENet disconnected");
-                    return;
+                    return false;
                 case ENetConnection.EventType.Error:
                     GD.PrintErr("ENet error");
-                    break;
+                    return false;
                 case ENetConnection.EventType.None:
                 case ENetConnection.EventType.Receive:
                     break;
@@ -548,10 +551,9 @@ public partial class ENetManager : Node
                     break;
             }
 
-            if (eventType == ENetConnection.EventType.Connect) break;
-
             await Task.Delay(50);
         }
+        return false;
     }
 
 private static ushort ToUInt16BigEndian(byte[] data, int startIndex)

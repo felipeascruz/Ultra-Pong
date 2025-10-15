@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace UltraPong;
 
 using Godot;
@@ -23,10 +25,9 @@ public partial class LocalMenu : Control
         {
             // Create server
             err = peer.CreateServer(8080, 4);
-
-            //Get User IP through OS Environment Variable
-            string ip = IP.ResolveHostname(OS.HasFeature("windows") ?
-                OS.GetEnvironment("COMPUTERNAME") : OS.GetEnvironment("HOSTNAME"), (IP.Type)1);
+            
+            var ips = IP.GetLocalAddresses().ToList();
+            ips.RemoveAll(ip => ip == "127.0.0.1" || ip.StartsWith("169.254.") || ip.Contains(':'));
             
             if (err != Error.Ok)
             {
@@ -34,7 +35,10 @@ public partial class LocalMenu : Control
                 return;
             }
 
-            GD.Print("Server running on IP: " + ip);
+            GD.Print("Server running on of the following IPs: ");
+            foreach (string ip in ips)
+                GD.Print(ip);
+            
             GetTree().CallDeferred("change_scene_to_file", "res://Main.tscn");
         }
         else

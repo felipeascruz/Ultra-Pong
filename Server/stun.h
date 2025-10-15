@@ -37,9 +37,9 @@ struct Peer {
     Peer();
     
     // Property-like getters
-    std::array<uint8_t, 4> publicIpv4() const;
-    uint16_t port() const { return enetPeer->address.port; }
-    uint32_t latency() const { return enetPeer->roundTripTime / 2; }
+    [[nodiscard]] std::array<uint8_t, 4> publicIpv4() const;
+    [[nodiscard]] uint16_t port() const { return enetPeer->address.port; }
+    [[nodiscard]] uint32_t latency() const { return enetPeer->roundTripTime / 2; }
 };
 
 struct Room {
@@ -51,7 +51,7 @@ struct Room {
     Room();
     
     // Check if the room has expired
-    bool hasExpired() const;
+    [[nodiscard]] bool hasExpired() const;
 };
 
 class RateLimiter {

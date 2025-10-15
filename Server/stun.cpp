@@ -451,9 +451,9 @@ void STUNServer::tryMatchPeers(const std::string& roomName) {
     host.isMatched = true;
     client->isMatched = true;
 
-    std::cout << "Matching clients: " << host.nickname
-            << " (host, latency: " << host.latency() << "ms) with "
-            << client->nickname << " (client, latency: " << client->latency() << "ms)" << std::endl;
+    std::cout << "Matching clients: " << host.nickname << "(" << bytesToIpv4(host.publicIpv4()) << ", host, latency: "
+    << host.latency() << "ms) with " << client->nickname << "(" << bytesToIpv4(client->publicIpv4())
+    << " , client, latency: " << client->latency() << "ms)" << std::endl;
 
     // Send peer info to both clients
     auto toHostPacket = createPeerInfoPacket(host, *client);
@@ -471,8 +471,19 @@ void STUNServer::tryMatchPeers(const std::string& roomName) {
 
 
 ENetPacket* STUNServer::createPeerInfoPacket(const Peer &to, const Peer &about) {
+    std::vector<std::array<uint8_t, 4>> ips;
+
+    if (about.publicIpv4() == to.publicIpv4()) {
+        ips.reserve(about.privateIps.size());
+        ips = about.privateIps;
+    }
+    else {
+        ips.reserve(1);
+        ips.push_back(about.publicIpv4());
+    }
+
     // Calculate packet size: 1 (message type) + 1 (ips length) + 4*N (ips) + 2 (port) + 2 (timestamp)
-    const size_t ipsCount = about.privateIps.size();
+    const size_t ipsCount = ips.size();
     const size_t packetSize = 1 + 1 + 4 * ipsCount + 2 + 2;
 
     auto data = std::make_unique<uint8_t[]>(packetSize);
@@ -485,11 +496,9 @@ ENetPacket* STUNServer::createPeerInfoPacket(const Peer &to, const Peer &about) 
     data[dataIndex++] = static_cast<uint8_t>(ipsCount);
 
     // IP addresses (4 bytes each)
-    for (const auto& ip : about.privateIps) {
-        for (size_t i = 0; i < 4; ++i) {
+    for (const auto& ip : ips)
+        for (size_t i = 0; i < 4; ++i)
             data[dataIndex++] = ip[i];
-        }
-    }
 
     // Port (2 bytes, big endian)
     const uint16_t port = about.port();
@@ -503,7 +512,7 @@ ENetPacket* STUNServer::createPeerInfoPacket(const Peer &to, const Peer &about) 
     const uint32_t maxLatency = std::max(toLatency, aboutLatency);
     const uint32_t calculatedWait = baseWaitMs + (3 * maxLatency - toLatency);
     constexpr uint32_t maxUint16 = 65535;
-    const uint16_t waitTimeMs = static_cast<uint16_t>(std::min(calculatedWait, maxUint16));
+    const auto waitTimeMs = static_cast<uint16_t>(std::min(calculatedWait, maxUint16));
 
     getBytesBigEndian(waitTimeMs, data.get() + dataIndex);
     dataIndex += 2;

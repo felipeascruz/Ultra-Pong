@@ -24,7 +24,7 @@ file_logging/enable_file_logging=true
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-window/size/mode=4
+window/size/mode=3
 window/size/window_width_override=1600
 window/size/window_height_override=900
 window/stretch/mode="viewport"
@@ -231,94 +231,88 @@ BoostC3={
 , Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":3,"axis":5,"axis_value":1.0,"script":null)
 ]
 }
-"Change Rotation"={
-"deadzone": 0.5,
-"events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":0,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
-]
-}
 "Restart Game"={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":82,"key_label":0,"unicode":114,"location":0,"echo":false,"script":null)
-, Object(InputEventJoypadButton,"resource_local_to_scene":false,"resource_name":"","device":0,"button_index":1,"pressure":0.0,"pressed":false,"script":null)
 ]
 }
 "Rotate UpC0"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":0,"axis":3,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate UpC1"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":1,"axis":3,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate UpC2"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":2,"axis":3,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate UpC3"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":3,"axis":3,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate DownC0"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":0,"axis":3,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate DownC1"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":1,"axis":3,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate DownC2"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":2,"axis":3,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate DownC3"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":3,"axis":3,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate RightC0"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":0,"axis":2,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate RightC1"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":1,"axis":2,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate RightC2"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":2,"axis":2,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate RightC3"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":3,"axis":2,"axis_value":1.0,"script":null)
 ]
 }
 "Rotate LeftC0"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":0,"axis":2,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate LeftC1"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":1,"axis":2,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate LeftC2"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":2,"axis":2,"axis_value":-1.0,"script":null)
 ]
 }
 "Rotate LeftC3"={
-"deadzone": 0.5,
+"deadzone": 0.3,
 "events": [Object(InputEventJoypadMotion,"resource_local_to_scene":false,"resource_name":"","device":3,"axis":2,"axis_value":-1.0,"script":null)
 ]
 }

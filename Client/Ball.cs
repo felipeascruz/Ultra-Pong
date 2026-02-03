@@ -9,7 +9,7 @@ public partial class Ball : RigidBody2D
 	private bool _reset;
 	private Vector2 _resetPosition;
 
-	public BallHandler.State ServerState { get; set; }
+	public BallHandler.State? ServerState { get; set; }
 	
 	public override void _EnterTree()
 	{
@@ -38,14 +38,16 @@ public partial class Ball : RigidBody2D
 			_reset = false;
 		}
 		
-		//Set state to server's state
+		// Set state to server's state
 		if (Multiplayer.IsServer())
 		{
 			GetNode<BallHandler>("../../Network/BallHandler").
 				ReturnBallStateWrapper(new BallHandler.State(Position, Rotation, LinearVelocity, AngularVelocity));
 			return;
 		}
-		
+
+		if (ServerState is null)
+			return;
 		Rotation = ServerState.Rotation;
 		t.Origin = ServerState.Position;
 		state.Transform = t;

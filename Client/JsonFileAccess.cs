@@ -18,7 +18,7 @@ public abstract class JsonFileAccess
         
         try
         {
-            return JsonSerializer.Deserialize<T>(content);
+            return JsonSerializer.Deserialize<T>(content) ?? throw new InvalidOperationException();
         }
         catch (JsonException ex)
         {

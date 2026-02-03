@@ -14,17 +14,10 @@ public partial class BallHandler : Node
 		GetNode<Ball>("../../World/Ball").ServerState = new State(position, rotation, linearVelocity, angularVelocity);
 	}
 
-	public class State
+	public class State(Vector2 position, float rotation, Vector2 linearVelocity, float angularVelocity)
 	{
-		public readonly float Rotation, AngularVelocity;
-		public readonly Vector2 Position, LinearVelocity;
-		
-		public State(Vector2 position, float rotation, Vector2 linearVelocity, float angularVelocity)
-		{
-			Position = position;
-			Rotation = rotation;
-			LinearVelocity = linearVelocity;
-			AngularVelocity = angularVelocity;
-		}
+		public readonly float Rotation = rotation, AngularVelocity = angularVelocity;
+		public readonly Vector2 Position = position, LinearVelocity = linearVelocity;
+
 	}
 }

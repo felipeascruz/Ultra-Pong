@@ -244,5 +244,9 @@ public partial class WorldHandler : Node
 		GetNode<StaticBody2D>(World + "MidField").ProcessMode = ProcessModeEnum.Disabled;
 		GetNode<Area2D>(World + "Goals").ProcessMode = ProcessModeEnum.Disabled;
 		ResetGame(_ballSpawnPoints[2]);
+		
+		var possessionTimer = GetNodeOrNull<PossessionTimer>(World + "Possession Timer");
+		possessionTimer?.Stop();
+		possessionTimer?.QueueFree();
 	}	
 }

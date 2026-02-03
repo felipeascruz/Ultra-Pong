@@ -14,7 +14,7 @@ public partial class Player : CharacterBody2D
 	private Sprite2D? _rotationIndicatorDown;
 	private Sprite2D? _rotationIndicatorUp;
 	private Node2D? _singleRotationIndicator;
-	private AudioStreamPlayer2D? _ballsfx;
+	private AudioStreamPlayer2D? _ballSfx;
 	
 	// Cache strings concatenation
 	private string? _moveLeftAction;
@@ -64,7 +64,7 @@ public partial class Player : CharacterBody2D
 		_nicknameNode = GetNode<Label>("Nickname");
 		_rectangleNode = GetNode<ColorRect>("Rectangle");
 		_timeDisplayNode = GetNode<Label>("../../Time Display");
-		_ballsfx = GetNode<AudioStreamPlayer2D>("../../Ball/SoundFX");
+		_ballSfx = GetNode<AudioStreamPlayer2D>("../../Ball/SoundFX");
 		
 		// Cache action strings
 		_moveLeftAction = "Move Left" + Device;
@@ -119,14 +119,14 @@ public partial class Player : CharacterBody2D
 		}
 		else 
 		{
-			indicatorModel.Name = "Rotation Indicator";
+			indicatorModel.Name = "Single Rotation Indicator";
 			indicatorModel.TopLevel = true;
 			AddChild(indicatorModel, true);
 		}
 		
-		_rotationIndicatorDown = GetNode<Sprite2D>("Rotation Indicator/Down");
-		_rotationIndicatorUp = GetNode<Sprite2D>("Rotation Indicator/Up");
-		_singleRotationIndicator = GetNode<Node2D>("Rotation Indicator");
+		_rotationIndicatorDown = GetNodeOrNull<Sprite2D>("Rotation Indicator/Down");
+		_rotationIndicatorUp = GetNodeOrNull<Sprite2D>("Rotation Indicator/Up");
+		_singleRotationIndicator = GetNodeOrNull<Node2D>("Single Rotation Indicator");
 	}
 
 	public override void _Process(double delta)
@@ -212,13 +212,16 @@ public partial class Player : CharacterBody2D
 
 		Velocity = Direction * _currentSpeed;
 		MoveAndSlide();
+
+		if (Device.Type == 'K')
+		{
+			var maxRotationThisFrame = Stats.MaxRotation * (float)delta;
+			var clampedRotation = Mathf.Clamp(RotateToAmount, -maxRotationThisFrame, maxRotationThisFrame);
 		
-		var maxRotationThisFrame = Stats.MaxRotation * (float)delta;
-		var clampedRotation = Mathf.Clamp(RotateToAmount, -maxRotationThisFrame, maxRotationThisFrame);
-		
-		Rotate(clampedRotation);
+			Rotate(clampedRotation);
 				
-		RotateToAmount = 0f;
+			RotateToAmount = 0f;
+		}
 
 		//Apply impulse to Ball
 		for (sbyte i = 0; i < GetSlideCollisionCount(); i++)
@@ -226,14 +229,14 @@ public partial class Player : CharacterBody2D
 			var c = GetSlideCollision(i);
 			if (c.GetCollider() is not Ball ball) continue;
 			
-			if (_ballsfx is null)
+			if (_ballSfx is null)
 			{
 				GD.PrintErr("Ball SFX node is null");
 				return;
 			}
 			
-			_ballsfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
-			_ballsfx.Play();
+			_ballSfx.PitchScale = 0.5F + ball.LinearVelocity.Length() / Ball.Stats.MaxSpeed;
+			_ballSfx.Play();
 				
 			ball.ApplyImpulse(-c.GetNormal() * Stats.Speed / 80f, c.GetPosition() - ball.GlobalPosition);
 
@@ -279,21 +282,6 @@ public partial class Player : CharacterBody2D
 		Direction = GetVector(_moveLeftAction, _moveRightAction, 
 			_moveUpAction, _moveDownAction);
 		
-		if (@event.IsActionPressed("Change Rotation"))
-		{
-			if (_singleRotationIndicator is null)
-			{
-				GD.PrintErr("Rotation indicator node is null");
-				return;
-			}
-			
-			if (_rotationDirection == 1)
-				_rotationDirection *= -1;
-			
-			_singleRotationIndicator.RotationDegrees += 180F;
-			return;
-		}
-		
 		if (_rotateLeftAction is null || _rotateRightAction is null || 
 		    _rotateUpAction is null || _rotateDownAction is null)
 			return;
@@ -307,12 +295,14 @@ public partial class Player : CharacterBody2D
 				break;
 			case InputEventJoypadMotion when Device.Type == 'C':
 			{
-				var to = GetVector(_rotateLeftAction, _rotateRightAction,
+				var rotateTo = GetVector(_rotateLeftAction, _rotateRightAction,
 					_rotateUpAction, _rotateDownAction);
-				if (to.Length() >= 1f)
+				if (rotateTo.Length() >= 0.9f)
 				{
-					var targetAngle = Mathf.Pi / 2 + to.Angle();
-					RotateToAmount = targetAngle;
+					var targetAngle = Mathf.Pi / 2 + rotateTo.Angle();
+					rotation = Rotation;
+					Rotation = targetAngle;
+					rotation = Rotation - rotation;	
 				}
 				break;
 			}

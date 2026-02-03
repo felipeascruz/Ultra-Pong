@@ -114,21 +114,14 @@ public partial class PlayersHandler : Node
 	private void RenderLocalStates(string name, uint inputStamp, Vector2 position, float rotation)
 	{
 		var player = GetCachedPlayer(name);
-
-		try
-		{
-			if (++inputStamp < player.InputStamp)
-				UpdateState(
-					position + player.Position - _localStates[name][inputStamp].Position,
-					rotation + player.Rotation - _localStates[name][inputStamp].Rotation);
-			else
-				UpdateState(position, rotation);
-		}
-		catch (Exception e)
-		{
-			GD.PrintErr("Error while updating state: " + e.Message);
-		}
-
+		
+		if (++inputStamp < player.InputStamp)
+			UpdateState(
+				position + player.Position - _localStates[name][inputStamp].Position,
+				rotation + player.Rotation - _localStates[name][inputStamp].Rotation);
+		else
+			UpdateState(position, rotation);
+		
 		return;
 
 		void UpdateState(Vector2 newPosition, float newRotation)

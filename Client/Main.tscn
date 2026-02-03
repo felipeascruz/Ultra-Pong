@@ -230,5 +230,9 @@ replication_config = SubResource("SceneReplicationConfig_uaqvs")
 visibility_update_mode = 2
 
 [node name="Choose Team" parent="World" instance=ExtResource("3_4o1i5")]
+offset_left = -1348.0
+offset_top = -322.0
+offset_right = 572.0
+offset_bottom = 758.0
 
 [connection signal="body_entered" from="World/Goals" to="Network/WorldHandler" method="Goal"]

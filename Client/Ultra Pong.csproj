@@ -18,7 +18,7 @@
   <ItemGroup>
     <Content Include="ballStats.json" />
     <Content Include="playerStats.json" />
-    <Content Include="test.gd" />
+    <Content Include="rcedit-x64.exe" />
     <Content Include="userStats.json" />
     <Content Include=".gitignore" />
   </ItemGroup>

@@ -98,8 +98,8 @@ public partial class Player : CharacterBody2D
 		if (!IsLocalPlayer) return;
 		
 		if (DisplayServer.WindowGetMode() is 
-		    DisplayServer.WindowMode.ExclusiveFullscreen or DisplayServer.WindowMode.Fullscreen)
-				MouseMode = MouseModeEnum.Captured;
+			DisplayServer.WindowMode.ExclusiveFullscreen or DisplayServer.WindowMode.Fullscreen)
+			MouseMode = MouseModeEnum.Captured;
 
 		var indicatorModel = new Sprite2D
 			{ Texture = GD.Load<Texture2D>("BallSprite.png"), Modulate = new Color{A = 1}, Scale = new Vector2(0.01f, 0.01f) };
@@ -160,11 +160,14 @@ public partial class Player : CharacterBody2D
 				GD.PrintErr("Rotation indicator node is null");
 				return;
 			}
+
+			var mainAlpha = 0.5f * (1 - _rotationDirection * Mathf.Cos(Rotation));
+			var color = new Color();
 			
-			var color = new Color { A = Mathf.Abs(Mathf.Cos(Rotation / 2F)) };
+			color.A = mainAlpha;
 			_rotationIndicatorDown.Modulate = color;
 
-			color.A = Mathf.Abs(Mathf.Sin(Rotation / 2F));
+			color.A = 1 - mainAlpha;
 			_rotationIndicatorUp.Modulate = color;
 			return;
 		}
@@ -274,8 +277,11 @@ public partial class Player : CharacterBody2D
 		if (@event.Device != Device.Number)
 			return;
 
+		if (IsActionJustPressed("Rotation Direction"))
+			_rotationDirection *= -1;
+
 		if (_boostAction is null || _moveLeftAction is null || _moveRightAction is null || 
-		    _moveUpAction is null || _moveDownAction is null)
+			_moveUpAction is null || _moveDownAction is null)
 			return;
 		
 		Boosting = IsActionPressed(_boostAction);
@@ -283,7 +289,7 @@ public partial class Player : CharacterBody2D
 			_moveUpAction, _moveDownAction);
 		
 		if (_rotateLeftAction is null || _rotateRightAction is null || 
-		    _rotateUpAction is null || _rotateDownAction is null)
+			_rotateUpAction is null || _rotateDownAction is null)
 			return;
 
 		var rotation = 0f;

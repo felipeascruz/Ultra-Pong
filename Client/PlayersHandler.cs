@@ -41,15 +41,15 @@ public partial class PlayersHandler : Node
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
 	private void FetchInput(string playerName, uint inputStamp, Vector2 direction, bool boosting, float rotation)
 	{
-	    var player = GetCachedPlayer(playerName);
+		var player = GetCachedPlayer(playerName);
 
-	    direction = direction.LimitLength();
-	    if (!player.Direction.IsEqualApprox(direction))
-	        player.Direction = direction;
+		direction = direction.LimitLength();
+		if (!player.Direction.IsEqualApprox(direction))
+			player.Direction = direction;
 
-	    player.Boosting = boosting;
-	    player.InputStamp = inputStamp;
-	    player.RotateToAmount = rotation;
+		player.Boosting = boosting;
+		player.InputStamp = inputStamp;
+		player.RotateToAmount = rotation;
 	}
 	
 	private Player GetCachedPlayer(string playerName)
@@ -72,22 +72,22 @@ public partial class PlayersHandler : Node
 		
 	public override void _PhysicsProcess(double delta)
 	{
-	    if (!Multiplayer.IsServer()) 
-	    { 
-	        RenderRemoteStates(); 
-	        return; 
-	    }
-	    
-	    if (_playersNode is null)
-	    {
-		    GD.PrintErr("Players node is null");
-		    return;
-	    }
-	    
-	    var players = _playersNode.GetChildren().Cast<Player>();
-	    
-	    foreach (var player in players)
-	        _serverStates[player.Name] = new State(player.Position, player.Rotation, player.InputStamp, player.Boosting);
+		if (!Multiplayer.IsServer()) 
+		{ 
+			RenderRemoteStates(); 
+			return; 
+		}
+		
+		if (_playersNode is null)
+		{
+			GD.PrintErr("Players node is null");
+			return;
+		}
+		
+		var players = _playersNode.GetChildren().Cast<Player>();
+		
+		foreach (var player in players)
+			_serverStates[player.Name] = new State(player.Position, player.Rotation, player.InputStamp, player.Boosting);
 
 		if (_serverStates.Count == 0) return;
 		

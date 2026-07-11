@@ -8,7 +8,7 @@ using System.Linq;
 using Godot;
 public partial class WorldHandler : Node
 {
-	private readonly Vector2[] _ballSpawnPoints = JsonFileAccess.Read<BallStats>("res://ballStats.json").SpawnPoints;
+	private readonly Vector2[] _ballSpawnPoints = JsonFileAccess.Read<BallStats>("user://ballStats.json").SpawnPoints;
 	private const string World = "../../World/";
 	
 	public override void _Ready()
@@ -57,7 +57,7 @@ public partial class WorldHandler : Node
 	{
 		Rpc(nameof(Despawn), Multiplayer.GetUniqueId().ToString() + device.Type + device.Number);
 		
-		var nickname = JsonFileAccess.Read<UserStats>("userStats.json").Nickname;
+		var nickname = JsonFileAccess.Read<UserStats>("user://userStats.json").Nickname;
 		Rpc(nameof(Spawn), nickname, Multiplayer.GetUniqueId(), playerNumber, device.Number, device.Type);
 	}
 	

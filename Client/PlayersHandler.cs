@@ -8,7 +8,7 @@ using Godot;
 
 public partial class PlayersHandler : Node
 {
-	private readonly float _maxRotation = JsonFileAccess.Read<PlayerStats>("res://playerStats.json").MaxRotation;
+	private readonly float _maxRotation = JsonFileAccess.Read<PlayerStats>("user://playerStats.json").MaxRotation;
 	
 	private readonly Dictionary<string, Dictionary<uint, State>> _localStates = new ();
 	private readonly Dictionary<string, State> _serverStates = new ();

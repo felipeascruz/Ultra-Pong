@@ -31,9 +31,9 @@ public partial class Player : CharacterBody2D
 	private float _currentSpeed = Stats.Speed;
 
 	
-	private static readonly PlayerStats Stats = JsonFileAccess.Read<PlayerStats>("res://playerStats.json");
+	private static readonly PlayerStats Stats = JsonFileAccess.Read<PlayerStats>("user://playerStats.json");
 	
-	private static readonly float Sensitivity = JsonFileAccess.Read<UserStats>("user://userStats.json").Sensitivity/100F;
+	private static float _sensitivity;
 	
 	public Device Device;
 	
@@ -59,6 +59,8 @@ public partial class Player : CharacterBody2D
 	
 	public override void _Ready()
 	{
+		_sensitivity = JsonFileAccess.Read<UserStats>("user://userStats.json").Sensitivity / 100F;
+		
 		// Cache Nodes
 		_playersHandler = GetNode<PlayersHandler>("../../../Network/PlayersHandler");
 		_nicknameNode = GetNode<Label>("Nickname");
@@ -76,7 +78,6 @@ public partial class Player : CharacterBody2D
 		_rotateRightAction = "Rotate Right" + Device;
 		_rotateUpAction = "Rotate Up" + Device;
 		_rotateDownAction = "Rotate Down" + Device;
-
 		
 		Name = Id.ToString() + Device;
 		Position = SpawnPoint;
@@ -90,7 +91,7 @@ public partial class Player : CharacterBody2D
 		rectangle.Position = -rectangle.Size / 2;
 		rectangle.Color = InitialColor;
 
-		GetNode<Label>("Nickname").TopLevel = true;
+		_nicknameNode.TopLevel = true;
 		
 		SetProcessUnhandledInput(IsLocalPlayer);
 		SetPhysicsProcess(IsLocalPlayer || Multiplayer.IsServer());
@@ -132,12 +133,9 @@ public partial class Player : CharacterBody2D
 	public override void _Process(double delta)
 	{
 		if (_nicknameNode is null)
-		{
 			GD.PrintErr("Nickname node is null");
-			return;
-		}
-		
-		_nicknameNode.Position = new Vector2(-_nicknameNode.Size.X/2, _nicknameNode.Size.Y/2 - Stats.Size.Y) + Position;
+		else
+			_nicknameNode.Position = new Vector2(-_nicknameNode.Size.X/2, _nicknameNode.Size.Y/2 - Stats.Size.Y) + Position;
 		
 		//TODO: better implement Overtime
 		//Check Overtime
@@ -296,7 +294,7 @@ public partial class Player : CharacterBody2D
 		switch (@event)
 		{
 			case InputEventMouseMotion mouseMotion when Device.Type == 'K':
-				rotation = _rotationDirection * mouseMotion.Relative.X * Sensitivity;
+				rotation = _rotationDirection * mouseMotion.Relative.X * _sensitivity;
 				RotateToAmount = rotation;
 				break;
 			case InputEventJoypadMotion when Device.Type == 'C':

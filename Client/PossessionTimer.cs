@@ -16,7 +16,7 @@ public partial class PossessionTimer : Timer
 	//Signal
 	private void OnTimeout()
 	{
-		var ballSpawnPoints = JsonFileAccess.Read<BallStats>("res://ballStats.json").SpawnPoints;
+		var ballSpawnPoints = JsonFileAccess.Read<BallStats>("user://ballStats.json").SpawnPoints;
 		GetNode<WorldHandler>("../../Network/WorldHandler").ResetGame(Label.Position.X < 960 ? ballSpawnPoints[1] : ballSpawnPoints[0]);
 	}
 }
